@@ -198,3 +198,23 @@ impl Trace {
         }
     }
 }
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MeasurementPrecision {
+    Exact,
+    SessionTotal,
+    Estimated,
+    Unavailable,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TokenUsage {
+    pub actor: Actor,
+    pub stage: Option<StageKind>,
+    pub precision: MeasurementPrecision,
+    pub input: Option<u64>,
+    pub cached_input: Option<u64>,
+    pub output: Option<u64>,
+    pub reasoning: Option<u64>,
+    pub total: Option<u64>,
+}
