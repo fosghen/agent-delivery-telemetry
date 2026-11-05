@@ -18,6 +18,15 @@ check_file() {
       echo "expected: @todo #ISSUE:MINUTESmin meaningful explanation" >&2
       return 1
     fi
+    if [[ "${CHECK_PUZZLE_ISSUES:-0}" == 1 ]]; then
+      issue="$(sed -E 's/.*@todo #([0-9]+):.*/\1/' <<< "$match")"
+      state="$(gh api "repos/$GITHUB_REPOSITORY/issues/$issue" \
+        --jq '[.state, has("pull_request")] | @tsv')"
+      if [[ "$state" != $'open\tfalse' ]]; then
+        echo "$path: puzzle must reference an open issue" >&2
+        return 1
+      fi
+    fi
   done <<< "$matches"
 }
 
