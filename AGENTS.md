@@ -22,6 +22,20 @@ request may contain at most 5 commits and 375 changed lines. Generated
 `Cargo.lock` changes are excluded from line counts; binary changes are forbidden.
 Never bypass hooks or checks.
 
+## TDD and puzzles
+
+For executable behavior, observe a focused test fail for the expected reason,
+make the smallest implementation pass, then refactor with tests green. Record the
+actual red and green commands in the pull request. Documentation-only changes and
+non-executable scaffolding are exempt.
+
+When required work is discovered outside the current issue, create a separate
+GitHub issue instead of expanding the pull request. If the deferred location must
+remain visible in code, use `@todo #N:30min` followed by a meaningful explanation.
+The issue must be open and the marker must be removed when it is completed. Bare
+TODO or FIXME markers are forbidden. This is the repository's issues-first
+adaptation of Puzzle Driven Development.
+
 ## Quality
 
 Run `cargo fmt --check`, Clippy with warnings denied, tests, and rustdoc with

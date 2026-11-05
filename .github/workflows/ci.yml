@@ -44,3 +44,8 @@ jobs:
         run: cargo doc --locked --no-deps --all-features
       - name: Lint workflows
         run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+      - name: Check puzzle policy
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHECK_PUZZLE_ISSUES: "1"
+        run: tests/check-puzzles.sh && scripts/check-puzzles.sh
