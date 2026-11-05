@@ -10,6 +10,7 @@ pub enum CommentError {
     MissingPayload,
     DuplicatePayload,
     MalformedJson,
+    BlankHeadRevision,
     InvalidUsage,
     UnsupportedVersion(u16),
 }
@@ -18,6 +19,7 @@ pub enum CommentError {
 #[serde(deny_unknown_fields)]
 pub struct TelemetryPayload {
     pub schema_version: u16,
+    pub head_sha: String,
     pub attempts: Vec<AttemptRecord>,
     pub stages: Vec<StageRecord>,
     pub verification: VerificationRecord,
@@ -159,6 +161,9 @@ pub fn parse_comment(comment: &str) -> Result<TelemetryPayload, CommentError> {
         serde_json::from_str(&json[..end]).map_err(|_| CommentError::MalformedJson)?;
     if payload.schema_version != crate::SCHEMA_VERSION {
         return Err(CommentError::UnsupportedVersion(payload.schema_version));
+    }
+    if payload.head_sha.trim().is_empty() {
+        return Err(CommentError::BlankHeadRevision);
     }
     validate_usage(&payload.usage).map_err(|_| CommentError::InvalidUsage)?;
     Ok(payload)

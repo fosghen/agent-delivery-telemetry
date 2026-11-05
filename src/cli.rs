@@ -107,6 +107,9 @@ pub fn run<P: CommentPort>(
     dry_run: bool,
 ) -> Result<CliOutcome, CliError<P::Error>> {
     let payload: TelemetryPayload = serde_json::from_str(payload).map_err(|_| CliError::Input)?;
+    if payload.head_sha.trim().is_empty() {
+        return Err(CliError::Input);
+    }
     validate_usage(&payload.usage).map_err(|_| CliError::Input)?;
     let desired = render_comment(&payload).map_err(|_| CliError::Input)?;
     if dry_run {
