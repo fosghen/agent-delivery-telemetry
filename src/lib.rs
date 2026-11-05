@@ -7,6 +7,7 @@ pub mod github;
 pub mod metrics;
 pub mod publish;
 pub mod reconcile;
+pub mod report;
 pub mod schema;
 
 /// Current persisted schema version.
