@@ -32,6 +32,34 @@ pub enum UsageCaptureError {
     Unchanged,
 }
 
+impl UsageCaptureError {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Missing => "missing",
+            Self::NonMonotonic => "non_monotonic",
+            Self::Unchanged => "unchanged",
+        }
+    }
+}
+
+#[must_use]
+pub fn unavailable_usage() -> UsageRecord {
+    UsageRecord {
+        actor: "primary".to_owned(),
+        provider: "openai".to_owned(),
+        model: None,
+        stage: None,
+        attempt: None,
+        precision: UsagePrecision::Unavailable,
+        input_tokens: None,
+        cached_input_tokens: None,
+        output_tokens: None,
+        reasoning_tokens: None,
+        total_tokens: None,
+    }
+}
+
 /// # Errors
 /// Returns an error when no valid cumulative token-count event exists.
 pub fn latest_snapshot(json_lines: &str) -> Result<TokenSnapshot, UsageCaptureError> {
