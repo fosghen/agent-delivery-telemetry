@@ -47,6 +47,31 @@ pub struct EvidenceVisibility {
     pub reviews: bool,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EvidenceSource {
+    Commits,
+    Checks,
+    Reviews,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EvidenceFailureKind {
+    Command,
+    Decode,
+    RateLimited,
+    RetryExhausted,
+    Unavailable,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct EvidenceFailure {
+    pub source: EvidenceSource,
+    pub kind: EvidenceFailureKind,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct EvidenceSnapshot {
@@ -56,4 +81,5 @@ pub struct EvidenceSnapshot {
     pub checks: Vec<CheckEvidence>,
     pub reviews: Vec<ReviewEvidence>,
     pub visibility: EvidenceVisibility,
+    pub failures: Vec<EvidenceFailure>,
 }
