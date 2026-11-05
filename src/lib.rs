@@ -2,6 +2,7 @@
 
 pub mod cli;
 pub mod comment;
+pub mod draft;
 pub mod evidence;
 pub mod github;
 pub mod metrics;

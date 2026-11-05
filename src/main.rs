@@ -1,9 +1,12 @@
 use std::process::ExitCode;
+use std::{fs::OpenOptions, io::Write};
 
 use agent_delivery_telemetry::cli::{CliError, parse_collect_args, parse_publish_args, run};
+use agent_delivery_telemetry::draft::WorkDraft;
 use agent_delivery_telemetry::github::{GhCommentPort, SystemGh};
 use agent_delivery_telemetry::reconcile::{ReconcileError, ReconciledTrace, reconcile};
 use agent_delivery_telemetry::report::build_report;
+use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 fn main() -> ExitCode {
     match execute() {
@@ -25,10 +28,57 @@ fn execute() -> Result<(), (&'static str, u8)> {
         .collect();
     match arguments.first().map(String::as_str) {
         Some("publish") => execute_publish(&values),
+        Some("begin") => execute_begin(&values),
+        Some("finish") => execute_finish(&values),
         Some("collect") => execute_collect(&values),
         Some("report") => execute_report(&values),
         _ => Err(("input", 2)),
     }
+}
+
+fn now() -> Result<String, (&'static str, u8)> {
+    OffsetDateTime::now_utc()
+        .format(&Rfc3339)
+        .map_err(|_| ("clock", 10))
+}
+
+fn execute_begin(values: &[&str]) -> Result<(), (&'static str, u8)> {
+    let [repository, issue, output] = values else {
+        return Err(("input", 2));
+    };
+    let issue = issue.parse().map_err(|_| ("input", 2))?;
+    let draft = WorkDraft::begin(repository, issue, &now()?).map_err(|_| ("input", 2))?;
+    let json = serde_json::to_string_pretty(&draft).map_err(|_| ("input", 2))?;
+    OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(output)
+        .and_then(|mut file| file.write_all(json.as_bytes()))
+        .map_err(|_| ("io", 11))?;
+    println!(r#"{{"action":"begun","issue":{issue}}}"#);
+    Ok(())
+}
+
+fn execute_finish(values: &[&str]) -> Result<(), (&'static str, u8)> {
+    let [repository, draft_path, head_sha, checks, output] = values else {
+        return Err(("input", 2));
+    };
+    let source = std::fs::read_to_string(draft_path).map_err(|_| ("io", 11))?;
+    let mut draft: WorkDraft = serde_json::from_str(&source).map_err(|_| ("input", 2))?;
+    let payload = draft
+        .finish(
+            repository,
+            head_sha,
+            checks.parse().map_err(|_| ("input", 2))?,
+            &now()?,
+        )
+        .map_err(|_| ("input", 2))?;
+    let json = serde_json::to_string_pretty(&payload).map_err(|_| ("input", 2))?;
+    std::fs::write(output, json).map_err(|_| ("io", 11))?;
+    let draft_json = serde_json::to_string_pretty(&draft).map_err(|_| ("input", 2))?;
+    std::fs::write(draft_path, draft_json).map_err(|_| ("io", 11))?;
+    println!(r#"{{"action":"finished"}}"#);
+    Ok(())
 }
 
 fn execute_publish(values: &[&str]) -> Result<(), (&'static str, u8)> {
