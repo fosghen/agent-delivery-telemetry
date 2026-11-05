@@ -79,6 +79,7 @@ pub struct UsageRecord {
     pub provider: String,
     pub model: Option<String>,
     pub stage: Option<String>,
+    pub attempt: Option<u32>,
     pub precision: UsagePrecision,
     pub input_tokens: Option<u64>,
     pub cached_input_tokens: Option<u64>,
@@ -91,7 +92,7 @@ pub struct UsageRecord {
 pub enum UsageError {
     BlankIdentity,
     InconsistentTotal,
-    SessionTotalHasStage,
+    SessionTotalAttributed,
     UnavailableHasCounts,
 }
 
@@ -113,8 +114,10 @@ pub fn validate_usage(records: &[UsageRecord]) -> Result<(), UsageError> {
         if record.precision == UsagePrecision::Unavailable && counts.iter().any(Option::is_some) {
             return Err(UsageError::UnavailableHasCounts);
         }
-        if record.precision == UsagePrecision::SessionTotal && record.stage.is_some() {
-            return Err(UsageError::SessionTotalHasStage);
+        if record.precision == UsagePrecision::SessionTotal
+            && (record.stage.is_some() || record.attempt.is_some())
+        {
+            return Err(UsageError::SessionTotalAttributed);
         }
         if let (Some(input), Some(output), Some(total)) = (
             record.input_tokens,

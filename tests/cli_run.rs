@@ -74,7 +74,7 @@ fn live_run_returns_created_identifier() {
 #[test]
 fn inconsistent_token_total_is_rejected_before_publication() {
     let mut port = FakePort::default();
-    let payload = PAYLOAD.replace(r#""usage": []"#, r#""usage": [{"actor":"primary","provider":"openai","model":null,"stage":null,"precision":"exact","input_tokens":1,"cached_input_tokens":null,"output_tokens":2,"reasoning_tokens":null,"total_tokens":4}]"#);
+    let payload = PAYLOAD.replace(r#""usage": []"#, r#""usage": [{"actor":"primary","provider":"openai","model":null,"stage":null,"attempt":1,"precision":"exact","input_tokens":1,"cached_input_tokens":null,"output_tokens":2,"reasoning_tokens":null,"total_tokens":4}]"#);
 
     assert_eq!(
         run(&mut port, "fosghen", &payload, false),

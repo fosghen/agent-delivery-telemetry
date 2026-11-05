@@ -1,6 +1,8 @@
 use agent_delivery_telemetry::comment::TelemetryPayload;
 use agent_delivery_telemetry::evidence::EvidenceSnapshot;
-use agent_delivery_telemetry::metrics::{ReviewMetrics, compute_trace_metrics};
+use agent_delivery_telemetry::metrics::{
+    ReviewMetrics, compute_token_metrics, compute_trace_metrics,
+};
 use agent_delivery_telemetry::reconcile::ReconciledTrace;
 
 #[test]
@@ -15,7 +17,13 @@ fn trace_metrics_pair_time_with_outcomes() {
       "attempts":[{"number":1,"outcome":"failed"},{"number":2,"outcome":"succeeded"}],
       "stages":[{"name":"implementation","outcome":"passed","duration_ms":3000},{"name":"rework","outcome":"passed","duration_ms":2000}],
       "verification":{"outcome":"passed","checks":3},
-      "review":{"decision":"requested","trigger":"correctness_uncertainty","requested_at":"2026-11-05T00:00:05Z","completed_at":"2026-11-05T00:00:08Z","outcome":"findings_confirmed","confirmed_findings":2,"rework_ms":120000},"usage":[]
+      "review":{"decision":"requested","trigger":"correctness_uncertainty","requested_at":"2026-11-05T00:00:05Z","completed_at":"2026-11-05T00:00:08Z","outcome":"findings_confirmed","confirmed_findings":2,"rework_ms":120000},
+      "usage":[
+        {"actor":"primary","provider":"openai","model":"codex","stage":"implementation","attempt":1,"precision":"exact","input_tokens":100,"cached_input_tokens":20,"output_tokens":30,"reasoning_tokens":10,"total_tokens":130},
+        {"actor":"primary","provider":"openai","model":"codex","stage":"verification","attempt":2,"precision":"exact","input_tokens":50,"cached_input_tokens":10,"output_tokens":20,"reasoning_tokens":null,"total_tokens":70},
+        {"actor":"reviewer","provider":"openai","model":null,"stage":null,"attempt":null,"precision":"session_total","input_tokens":400,"cached_input_tokens":null,"output_tokens":100,"reasoning_tokens":null,"total_tokens":500},
+        {"actor":"legacy","provider":"unknown","model":null,"stage":null,"attempt":null,"precision":"unavailable","input_tokens":null,"cached_input_tokens":null,"output_tokens":null,"reasoning_tokens":null,"total_tokens":null}
+      ]
     }"#).unwrap();
     let trace = ReconciledTrace {
         evidence,
@@ -41,4 +49,12 @@ fn trace_metrics_pair_time_with_outcomes() {
             rework_ms: Some(120_000),
         }
     );
+    let tokens = compute_token_metrics(&trace).unwrap();
+    assert_eq!(tokens.exact_totals.total, Some(200));
+    assert_eq!(tokens.cache_share_bps, Some(2_000));
+    assert_eq!(tokens.failed_attempt_tokens, Some(130));
+    assert_eq!(tokens.exact.len(), 2);
+    assert_eq!(tokens.session_totals.len(), 1);
+    assert_eq!(tokens.estimates.len(), 0);
+    assert_eq!(tokens.unavailable.len(), 1);
 }

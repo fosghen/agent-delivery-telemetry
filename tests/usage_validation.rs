@@ -6,6 +6,7 @@ fn usage(precision: UsagePrecision) -> UsageRecord {
         provider: "openai".to_owned(),
         model: Some("gpt".to_owned()),
         stage: None,
+        attempt: Some(1),
         precision,
         input_tokens: Some(10),
         cached_input_tokens: Some(4),
@@ -37,7 +38,7 @@ fn usage_rejects_inconsistent_totals_and_stage_attributed_session_totals() {
     session.stage = Some("implementation".to_owned());
     assert_eq!(
         validate_usage(&[session]),
-        Err(UsageError::SessionTotalHasStage)
+        Err(UsageError::SessionTotalAttributed)
     );
 }
 

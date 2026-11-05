@@ -7,6 +7,7 @@ fn token_usage_preserves_actor_model_and_precision() {
         provider: "openai".to_owned(),
         model: Some("codex".to_owned()),
         stage: None,
+        attempt: None,
         precision: UsagePrecision::SessionTotal,
         input_tokens: Some(100),
         cached_input_tokens: Some(20),
