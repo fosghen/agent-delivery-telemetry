@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::time::Duration;
 
 use rusqlite::{Connection, Result, params};
 
@@ -58,6 +59,8 @@ impl Store {
     }
 
     fn from_connection(mut connection: Connection) -> Result<Self> {
+        connection.busy_timeout(Duration::from_secs(5))?;
+        connection.pragma_update(None, "journal_mode", "WAL")?;
         connection.pragma_update(None, "foreign_keys", true)?;
         let version: u32 = connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
         if version == 0 {
@@ -75,6 +78,14 @@ impl Store {
     pub fn migration_version(&self) -> Result<u32> {
         self.connection
             .pragma_query_value(None, "user_version", |row| row.get(0))
+    }
+
+    /// # Errors
+    ///
+    /// Returns an error when SQLite cannot report the journal mode.
+    pub fn journal_mode(&self) -> Result<String> {
+        self.connection
+            .pragma_query_value(None, "journal_mode", |row| row.get(0))
     }
 
     /// # Errors
