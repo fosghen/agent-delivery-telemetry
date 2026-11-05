@@ -3,7 +3,8 @@ use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 use crate::codex_usage::{TokenSnapshot, UsageCaptureError, latest_snapshot, session_delta};
 use crate::comment::{
-    AttemptRecord, ReviewRecord, StageRecord, TelemetryPayload, UsageRecord, VerificationRecord,
+    AttemptRecord, ReviewRecord, StageRecord, TelemetryPayload, UsagePrecision, UsageRecord,
+    VerificationRecord,
 };
 
 const MAX_DRAFT_AGE_MS: u64 = 7 * 24 * 60 * 60 * 1_000;
@@ -14,6 +15,14 @@ pub enum DraftError {
     Mismatch,
     Stale,
     Finished,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TokenRefreshError {
+    Unfinished,
+    Mismatch,
+    AlreadyRefreshed,
+    Usage(UsageCaptureError),
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -64,6 +73,34 @@ impl WorkDraft {
             .as_ref()
             .ok_or(UsageCaptureError::Missing)?;
         session_delta(baseline, &latest_snapshot(session_json_lines)?)
+    }
+
+    /// # Errors
+    /// Returns an error unless a matching finished payload can receive a fresh delta.
+    pub fn refresh_tokens(
+        &self,
+        payload: &mut TelemetryPayload,
+        session_json_lines: &str,
+    ) -> Result<(), TokenRefreshError> {
+        if self.finished_at.is_none() {
+            return Err(TokenRefreshError::Unfinished);
+        }
+        if payload.work_started_at.as_deref() != Some(&self.work_started_at) {
+            return Err(TokenRefreshError::Mismatch);
+        }
+        if payload
+            .usage
+            .iter()
+            .any(|usage| usage.precision == UsagePrecision::SessionTotal)
+        {
+            return Err(TokenRefreshError::AlreadyRefreshed);
+        }
+        let usage = self
+            .token_usage(session_json_lines)
+            .map_err(TokenRefreshError::Usage)?;
+        payload.usage.clear();
+        payload.usage.push(usage);
+        Ok(())
     }
 
     /// # Errors
