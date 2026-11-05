@@ -10,6 +10,28 @@ pub struct PublishArgs {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ParseError;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Action {
+    Create,
+    Update,
+    Unchanged,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+pub struct CliOutcome {
+    pub action: Action,
+    pub id: Option<u64>,
+    pub dry_run: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CliError<E> {
+    Input,
+    Conflict,
+    Transport(E),
+}
+
 /// # Errors
 ///
 /// Returns an error for unknown, missing, or invalid arguments.
@@ -69,4 +91,57 @@ pub fn parse_publish_args(arguments: &[&str]) -> Result<PublishArgs, ParseError>
         payload,
         dry_run,
     })
+}
+use crate::comment::{TelemetryPayload, render_comment};
+use crate::publish::{
+    CommentPort, PublishError, PublishOutcome, UpsertDecision, decide_upsert, publish,
+};
+use serde::Serialize;
+
+/// # Errors
+/// Returns an input, comment-selection, or provider transport error.
+pub fn run<P: CommentPort>(
+    port: &mut P,
+    owner: &str,
+    payload: &str,
+    dry_run: bool,
+) -> Result<CliOutcome, CliError<P::Error>> {
+    let payload: TelemetryPayload = serde_json::from_str(payload).map_err(|_| CliError::Input)?;
+    let desired = render_comment(&payload).map_err(|_| CliError::Input)?;
+    if dry_run {
+        let comments = port.list().map_err(CliError::Transport)?;
+        let decision = decide_upsert(&comments, owner, &desired).map_err(|_| CliError::Conflict)?;
+        return Ok(match decision {
+            UpsertDecision::Create { .. } => CliOutcome {
+                action: Action::Create,
+                id: None,
+                dry_run,
+            },
+            UpsertDecision::Update { id, .. } => CliOutcome {
+                action: Action::Update,
+                id: Some(id),
+                dry_run,
+            },
+            UpsertDecision::Unchanged { id } => CliOutcome {
+                action: Action::Unchanged,
+                id: Some(id),
+                dry_run,
+            },
+        });
+    }
+    publish(port, owner, &desired)
+        .map(|outcome| match outcome {
+            PublishOutcome::Created { id } => (Action::Create, id),
+            PublishOutcome::Updated { id } => (Action::Update, id),
+            PublishOutcome::Unchanged { id } => (Action::Unchanged, id),
+        })
+        .map(|(action, id)| CliOutcome {
+            action,
+            id: Some(id),
+            dry_run,
+        })
+        .map_err(|error| match error {
+            PublishError::Selection(_) => CliError::Conflict,
+            PublishError::Transport(error) => CliError::Transport(error),
+        })
 }
