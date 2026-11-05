@@ -65,3 +65,48 @@ fn mismatched_revision_is_stale() {
         Err(ReconcileError::StaleTelemetry)
     );
 }
+
+#[test]
+fn missing_and_duplicate_owned_telemetry_are_distinct() {
+    assert_eq!(
+        reconcile(evidence(), &[], "fosghen"),
+        Err(ReconcileError::MissingTelemetry)
+    );
+    assert_eq!(
+        reconcile(
+            evidence(),
+            &[comment(9, "abc"), comment(10, "abc")],
+            "fosghen"
+        ),
+        Err(ReconcileError::DuplicateTelemetry)
+    );
+}
+
+#[test]
+fn malformed_and_unsupported_payloads_remain_typed() {
+    use agent_delivery_telemetry::comment::{COMMENT_MARKER, CommentError};
+    let malformed = CommentSnapshot {
+        id: 9,
+        author: "fosghen".to_owned(),
+        body: format!("{COMMENT_MARKER}\n```json\n{{\n```"),
+    };
+    assert_eq!(
+        reconcile(evidence(), &[malformed], "fosghen"),
+        Err(ReconcileError::InvalidTelemetry(
+            CommentError::MalformedJson
+        ))
+    );
+    let mut future = payload("abc");
+    future.schema_version = 2;
+    let unsupported = CommentSnapshot {
+        id: 10,
+        author: "fosghen".to_owned(),
+        body: render_comment(&future).unwrap(),
+    };
+    assert_eq!(
+        reconcile(evidence(), &[unsupported], "fosghen"),
+        Err(ReconcileError::InvalidTelemetry(
+            CommentError::UnsupportedVersion(2)
+        ))
+    );
+}
