@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::comment::{UsagePrecision, UsageRecord};
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TokenSnapshot {
     pub input_tokens: u64,
@@ -46,4 +48,37 @@ pub fn latest_snapshot(json_lines: &str) -> Result<TokenSnapshot, UsageCaptureEr
         .filter_map(|value| serde_json::from_value(value).ok())
         .next_back()
         .ok_or(UsageCaptureError::Missing)
+}
+
+fn difference(before: u64, after: u64) -> Result<u64, UsageCaptureError> {
+    after
+        .checked_sub(before)
+        .ok_or(UsageCaptureError::NonMonotonic)
+}
+
+/// # Errors
+/// Returns an error for unchanged or non-monotonic cumulative counters.
+pub fn session_delta(
+    before: &TokenSnapshot,
+    after: &TokenSnapshot,
+) -> Result<UsageRecord, UsageCaptureError> {
+    if before == after {
+        return Err(UsageCaptureError::Unchanged);
+    }
+    Ok(UsageRecord {
+        actor: "primary".to_owned(),
+        provider: "openai".to_owned(),
+        model: None,
+        stage: None,
+        attempt: None,
+        precision: UsagePrecision::SessionTotal,
+        input_tokens: Some(difference(before.input_tokens, after.input_tokens)?),
+        cached_input_tokens: Some(difference(
+            before.cached_input_tokens,
+            after.cached_input_tokens,
+        )?),
+        output_tokens: Some(difference(before.output_tokens, after.output_tokens)?),
+        reasoning_tokens: Some(difference(before.reasoning_tokens, after.reasoning_tokens)?),
+        total_tokens: Some(difference(before.total_tokens, after.total_tokens)?),
+    })
 }
