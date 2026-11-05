@@ -76,6 +76,16 @@ unchanged, unreadable, or non-monotonic counters remain unavailable; the finish
 command reports the reason instead of inventing counts. Omit the session argument
 when the local Codex runtime does not expose token-count events.
 
+Codex may append the final cumulative counters only after the measured agent
+turn completes. In the next turn, refresh the already-finished payload and
+publish it again; timestamps and all non-token evidence remain unchanged:
+
+```sh
+cargo run -- refresh-tokens /tmp/issue-42.json /tmp/payload.json
+cargo run -- publish --repo fosghen/project --pr 42 \
+  --owner fosghen --payload /tmp/payload.json
+```
+
 ```sh
 cargo run -- publish --repo fosghen/project --pr 42 \
   --owner fosghen --payload trace.json --dry-run
