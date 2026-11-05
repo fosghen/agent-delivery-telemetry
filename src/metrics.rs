@@ -403,9 +403,11 @@ pub fn aggregate_metrics(traces: &[TraceAnalysis]) -> Result<PortfolioMetrics, M
         .collect();
     let review_requests = u32::try_from(requested.len()).map_err(|_| MetricsError::Overflow)?;
     let confirmed_findings = requested.iter().map(|value| u64::from(*value)).sum::<u64>();
-    let findings_per_review_milli = (review_requests > 0)
-        .then_some(confirmed_findings.saturating_mul(1_000) / u64::from(review_requests))
-        .and_then(|value| u32::try_from(value).ok());
+    let findings_per_review_milli = if review_requests > 0 {
+        u32::try_from(confirmed_findings.saturating_mul(1_000) / u64::from(review_requests)).ok()
+    } else {
+        None
+    };
     Ok(PortfolioMetrics {
         traces: trace_count,
         merged_issues,
