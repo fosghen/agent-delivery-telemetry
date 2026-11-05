@@ -1,6 +1,6 @@
 use agent_delivery_telemetry::evidence::{
-    CheckEvidence, CommitEvidence, EvidenceSnapshot, EvidenceVisibility, PullRequestEvidence,
-    ReviewEvidence,
+    CheckEvidence, CommitEvidence, EvidenceFailure, EvidenceFailureKind, EvidenceSnapshot,
+    EvidenceSource, EvidenceVisibility, PullRequestEvidence, ReviewEvidence,
 };
 
 #[test]
@@ -39,6 +39,10 @@ fn evidence_round_trips_without_repository_contents() {
             checks: true,
             reviews: false,
         },
+        failures: vec![EvidenceFailure {
+            source: EvidenceSource::Reviews,
+            kind: EvidenceFailureKind::Unavailable,
+        }],
     };
 
     let json = serde_json::to_string(&snapshot).unwrap();
