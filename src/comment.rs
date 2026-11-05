@@ -20,6 +20,8 @@ pub enum CommentError {
 pub struct TelemetryPayload {
     pub schema_version: u16,
     pub head_sha: String,
+    #[serde(default)]
+    pub work_started_at: Option<String>,
     pub attempts: Vec<AttemptRecord>,
     pub stages: Vec<StageRecord>,
     pub verification: VerificationRecord,

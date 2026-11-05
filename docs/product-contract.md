@@ -12,8 +12,8 @@ The GitHub-backed MVP accepts three classes of input:
 
 1. Native GitHub evidence: issue, pull request, commits, CI, optional review, and
    merge timestamps and identifiers.
-2. One pull-request comment marked `adt:v1`, containing local stages, attempts,
-   verification outcomes, token usage, and measurement provenance.
+2. One pull-request comment marked `adt:v1`, containing work start, local
+   stages, attempts, verification outcomes, token usage, and provenance.
 3. User annotations in that record for decisions GitHub cannot observe, such as
    why an independent review was requested.
 
@@ -38,7 +38,8 @@ for them. Session totals are never distributed among stages by assumption.
 The durable MVP record is the versioned PR comment plus the native GitHub
 timeline. The tool reconstructs a trace on demand and derives:
 
-- issue-to-merge lead time and stage durations;
+- work-start-to-merge delivery lead time and stage durations;
+- pull-request-created-to-merge cycle time;
 - active, waiting, retry, and rework time;
 - tokens by actor, model, stage, attempt, and outcome;
 - optional-review invocation, duration, outcome, and confirmed-finding yield;
@@ -66,6 +67,7 @@ comments are a conflict rather than an implicit choice. Rate limits and temporar
 GitHub failures remain retryable. Missing optional review or token data produces
 a valid incomplete trace, not a fabricated zero.
 
-Work abandoned before a pull request exists is outside the v0.1 boundary. Local
-persistence and GitLab reconciliation are post-MVP capabilities. Schema changes
-require explicit versioning and compatibility tests.
+Work abandoned before a pull request exists is outside the v0.1 report boundary.
+A small local draft may carry observed pre-PR metadata into the eventual PR;
+durable local persistence and GitLab reconciliation remain post-MVP. Schema
+changes require explicit versioning and compatibility tests.

@@ -7,6 +7,7 @@ fn payload() -> TelemetryPayload {
     TelemetryPayload {
         schema_version: 1,
         head_sha: "abc".to_owned(),
+        work_started_at: None,
         attempts: Vec::new(),
         stages: Vec::new(),
         verification: VerificationRecord {

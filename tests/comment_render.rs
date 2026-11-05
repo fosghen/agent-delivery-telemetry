@@ -7,6 +7,7 @@ fn rendered_comment_has_human_summary_and_machine_payload() {
     let payload = TelemetryPayload {
         schema_version: 1,
         head_sha: "abc".to_owned(),
+        work_started_at: None,
         attempts: Vec::new(),
         stages: Vec::new(),
         verification: VerificationRecord {

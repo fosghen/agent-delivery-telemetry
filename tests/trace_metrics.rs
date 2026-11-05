@@ -14,6 +14,7 @@ fn trace_metrics_pair_time_with_outcomes() {
     }"#).unwrap();
     let telemetry: TelemetryPayload = serde_json::from_str(r#"{
       "schema_version":1,"head_sha":"abc",
+      "work_started_at":"2026-11-04T23:59:50Z",
       "attempts":[{"number":1,"outcome":"failed"},{"number":2,"outcome":"succeeded"}],
       "stages":[{"name":"implementation","outcome":"passed","duration_ms":3000},{"name":"rework","outcome":"passed","duration_ms":2000}],
       "verification":{"outcome":"passed","checks":3},
@@ -33,9 +34,10 @@ fn trace_metrics_pair_time_with_outcomes() {
 
     let metrics = compute_trace_metrics(&trace).unwrap();
 
-    assert_eq!(metrics.lead_time_ms, Some(10_000));
+    assert_eq!(metrics.delivery_lead_time_ms, Some(20_000));
+    assert_eq!(metrics.pr_cycle_time_ms, Some(10_000));
     assert_eq!(metrics.active_time_ms, Some(5_000));
-    assert_eq!(metrics.wait_time_ms, Some(5_000));
+    assert_eq!(metrics.wait_time_ms, Some(15_000));
     assert_eq!(metrics.retries, 1);
     assert_eq!(metrics.rework_ms, Some(2_000));
     assert_eq!(metrics.rework_share_bps, Some(4_000));
