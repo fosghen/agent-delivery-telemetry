@@ -10,6 +10,7 @@ pub enum CommentError {
     MissingPayload,
     DuplicatePayload,
     MalformedJson,
+    InvalidUsage,
     UnsupportedVersion(u16),
 }
 
@@ -69,6 +70,47 @@ pub struct UsageRecord {
     pub total_tokens: Option<u64>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UsageError {
+    BlankIdentity,
+    InconsistentTotal,
+    SessionTotalHasStage,
+    UnavailableHasCounts,
+}
+
+/// # Errors
+///
+/// Returns an error when token provenance or counts are inconsistent.
+pub fn validate_usage(records: &[UsageRecord]) -> Result<(), UsageError> {
+    for record in records {
+        if record.actor.trim().is_empty() || record.provider.trim().is_empty() {
+            return Err(UsageError::BlankIdentity);
+        }
+        let counts = [
+            record.input_tokens,
+            record.cached_input_tokens,
+            record.output_tokens,
+            record.reasoning_tokens,
+            record.total_tokens,
+        ];
+        if record.precision == UsagePrecision::Unavailable && counts.iter().any(Option::is_some) {
+            return Err(UsageError::UnavailableHasCounts);
+        }
+        if record.precision == UsagePrecision::SessionTotal && record.stage.is_some() {
+            return Err(UsageError::SessionTotalHasStage);
+        }
+        if let (Some(input), Some(output), Some(total)) = (
+            record.input_tokens,
+            record.output_tokens,
+            record.total_tokens,
+        ) && input.checked_add(output) != Some(total)
+        {
+            return Err(UsageError::InconsistentTotal);
+        }
+    }
+    Ok(())
+}
+
 /// # Errors
 ///
 /// Returns an error when the payload cannot be encoded as JSON.
@@ -118,5 +160,6 @@ pub fn parse_comment(comment: &str) -> Result<TelemetryPayload, CommentError> {
     if payload.schema_version != crate::SCHEMA_VERSION {
         return Err(CommentError::UnsupportedVersion(payload.schema_version));
     }
+    validate_usage(&payload.usage).map_err(|_| CommentError::InvalidUsage)?;
     Ok(payload)
 }
