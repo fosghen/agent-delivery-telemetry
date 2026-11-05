@@ -52,6 +52,23 @@ RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps --all-features
 Authenticate with `gh auth login`; the token needs pull-request read and issue
 comment write access.
 
+For exact per-run token counts, route a non-interactive agent through the
+supported JSON event stream. The telemetry process consumes the stream and
+persists only a sanitized usage record; it does not persist the raw trace,
+prompt, response, or source contents:
+
+```sh
+set -o pipefail
+codex exec --json --full-auto 'Implement issue #42' \
+  | agent-delivery-telemetry capture-codex-usage /tmp/issue-42-usage.json
+```
+
+The command requires exactly one complete `turn.completed` event and fails on
+missing, duplicate, malformed, or incomplete usage. Binding captured run files
+to the final PR payload is a separate planned slice. Interactive Codex session
+logs remain a best-effort fallback because their cumulative counters may lag or
+be absent.
+
 Before coding, record the task start in an explicit local draft:
 
 ```sh
