@@ -49,10 +49,14 @@ impl UsageCaptureError {
 
 #[derive(Deserialize)]
 struct ExecUsage {
-    input_tokens: u64,
-    cached_input_tokens: u64,
-    output_tokens: u64,
-    reasoning_output_tokens: u64,
+    #[serde(rename = "input_tokens")]
+    input: u64,
+    #[serde(rename = "cached_input_tokens")]
+    cached_input: u64,
+    #[serde(rename = "output_tokens")]
+    output: u64,
+    #[serde(rename = "reasoning_output_tokens")]
+    reasoning_output: u64,
 }
 
 /// Parses one completed controlled `codex exec --json` stream.
@@ -76,14 +80,13 @@ pub fn exact_exec_usage(json_lines: &str) -> Result<UsageRecord, UsageCaptureErr
             .cloned()
             .ok_or(UsageCaptureError::Missing)?;
         completed = Some(
-            serde_json::from_value::<ExecUsage>(value)
-                .map_err(|_| UsageCaptureError::Missing)?,
+            serde_json::from_value::<ExecUsage>(value).map_err(|_| UsageCaptureError::Missing)?,
         );
     }
     let usage = completed.ok_or(UsageCaptureError::Missing)?;
     let total = usage
-        .input_tokens
-        .checked_add(usage.output_tokens)
+        .input
+        .checked_add(usage.output)
         .ok_or(UsageCaptureError::Malformed)?;
     Ok(UsageRecord {
         actor: "primary".to_owned(),
@@ -92,10 +95,10 @@ pub fn exact_exec_usage(json_lines: &str) -> Result<UsageRecord, UsageCaptureErr
         stage: None,
         attempt: None,
         precision: UsagePrecision::Exact,
-        input_tokens: Some(usage.input_tokens),
-        cached_input_tokens: Some(usage.cached_input_tokens),
-        output_tokens: Some(usage.output_tokens),
-        reasoning_tokens: Some(usage.reasoning_output_tokens),
+        input_tokens: Some(usage.input),
+        cached_input_tokens: Some(usage.cached_input),
+        output_tokens: Some(usage.output),
+        reasoning_tokens: Some(usage.reasoning_output),
         total_tokens: Some(total),
     })
 }
