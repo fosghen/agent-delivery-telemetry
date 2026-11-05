@@ -23,6 +23,7 @@ pub struct TelemetryPayload {
     pub attempts: Vec<AttemptRecord>,
     pub stages: Vec<StageRecord>,
     pub verification: VerificationRecord,
+    pub review: ReviewRecord,
     pub usage: Vec<UsageRecord>,
 }
 
