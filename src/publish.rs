@@ -27,14 +27,19 @@ pub fn decide_upsert(
     owner: &str,
     desired: &str,
 ) -> Result<UpsertDecision, UpsertError> {
-    if comments
+    let eligible: Vec<_> = comments
         .iter()
-        .any(|comment| comment.author == owner && comment.body.contains(COMMENT_MARKER))
-    {
-        Err(UpsertError::MultipleEligibleComments)
-    } else {
-        Ok(UpsertDecision::Create {
+        .filter(|comment| comment.author == owner && comment.body.contains(COMMENT_MARKER))
+        .collect();
+    match eligible.as_slice() {
+        [] => Ok(UpsertDecision::Create {
             body: desired.to_owned(),
-        })
+        }),
+        [comment] if comment.body == desired => Ok(UpsertDecision::Unchanged { id: comment.id }),
+        [comment] => Ok(UpsertDecision::Update {
+            id: comment.id,
+            body: desired.to_owned(),
+        }),
+        _ => Err(UpsertError::MultipleEligibleComments),
     }
 }
