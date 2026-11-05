@@ -30,7 +30,7 @@ fn execute() -> Result<(), (&'static str, u8)> {
 }
 
 fn execute_publish(values: &[&str]) -> Result<(), (&'static str, u8)> {
-    let options = parse_publish_args(&values).map_err(|_| ("input", 2))?;
+    let options = parse_publish_args(values).map_err(|_| ("input", 2))?;
     let payload = std::fs::read_to_string(&options.payload).map_err(|_| ("input", 2))?;
     let mut port = GhCommentPort::new(SystemGh, options.repository, options.pull_request);
     let outcome =
