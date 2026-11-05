@@ -170,7 +170,10 @@ impl<R> GhCommentPort<R> {
 }
 use serde::Deserialize;
 
-use crate::evidence::{CheckEvidence, CommitEvidence, PullRequestEvidence, ReviewEvidence};
+use crate::evidence::{
+    CheckEvidence, CommitEvidence, EvidenceSnapshot, EvidenceSource, EvidenceVisibility,
+    PullRequestEvidence, ReviewEvidence,
+};
 use crate::publish::{CommentPort, CommentSnapshot};
 
 #[derive(Deserialize)]
@@ -262,6 +265,44 @@ fn closing_issues(body: Option<&str>) -> Vec<u64> {
 }
 
 impl<R: CommandRunner> GhCommentPort<R> {
+    /// # Errors
+    ///
+    /// Returns a classified error when required pull-request evidence is unavailable.
+    pub fn evidence_snapshot(&mut self) -> Result<EvidenceSnapshot, SnapshotError>
+    where
+        R::Error: ClassifyFailure,
+    {
+        let (pull_request, linked_issues) =
+            self.pull_request_evidence()
+                .map_err(|error| SnapshotError {
+                    kind: failure_kind(&error),
+                })?;
+        let head_sha = pull_request.head_sha.clone();
+        let (commits, commits_visible, commits_failure) =
+            fetch_optional(EvidenceSource::Commits, || self.commit_evidence());
+        let (checks, checks_visible, checks_failure) =
+            fetch_optional(EvidenceSource::Checks, || self.check_evidence(&head_sha));
+        let (reviews, reviews_visible, reviews_failure) =
+            fetch_optional(EvidenceSource::Reviews, || self.review_evidence());
+        let failures = [commits_failure, checks_failure, reviews_failure]
+            .into_iter()
+            .flatten()
+            .collect();
+        Ok(EvidenceSnapshot {
+            pull_request,
+            linked_issues,
+            commits,
+            checks,
+            reviews,
+            visibility: EvidenceVisibility {
+                commits: commits_visible,
+                checks: checks_visible,
+                reviews: reviews_visible,
+            },
+            failures,
+        })
+    }
+
     /// # Errors
     ///
     /// Returns a command or response-decoding error.
@@ -462,6 +503,11 @@ impl<R: CommandRunner> GhCommentPort<R> {
             .map_err(GhError::Command)?;
         Ok(())
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SnapshotError {
+    pub kind: crate::evidence::EvidenceFailureKind,
 }
 
 impl<R: CommandRunner> CommentPort for GhCommentPort<R> {
