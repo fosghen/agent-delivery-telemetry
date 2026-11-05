@@ -115,7 +115,8 @@ pub fn compute_trace_metrics(trace: &ReconciledTrace) -> Result<TraceMetrics, Me
         lead_time_ms,
         active_time_ms,
         wait_time_ms,
-        retries: trace.telemetry.attempts.len().saturating_sub(1) as u32,
+        retries: u32::try_from(trace.telemetry.attempts.len().saturating_sub(1))
+            .map_err(|_| MetricsError::Overflow)?,
         rework_ms,
         rework_share_bps,
         review: review_metrics(&trace.telemetry.review)?,
