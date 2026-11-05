@@ -6,8 +6,11 @@ const JSON_FENCE: &str = "```json\n";
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CommentError {
     MissingMarker,
+    DuplicateMarker,
     MissingPayload,
+    DuplicatePayload,
     MalformedJson,
+    UnsupportedVersion(u16),
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -93,12 +96,27 @@ pub fn render_comment(payload: &TelemetryPayload) -> serde_json::Result<String> 
 ///
 /// Returns an error when the marker, JSON block, or payload is invalid.
 pub fn parse_comment(comment: &str) -> Result<TelemetryPayload, CommentError> {
+    match comment.matches(COMMENT_MARKER).count() {
+        0 => return Err(CommentError::MissingMarker),
+        1 => {}
+        _ => return Err(CommentError::DuplicateMarker),
+    }
     let marker = comment
         .find(COMMENT_MARKER)
         .ok_or(CommentError::MissingMarker)?;
     let body = &comment[marker + COMMENT_MARKER.len()..];
+    match body.matches(JSON_FENCE).count() {
+        0 => return Err(CommentError::MissingPayload),
+        1 => {}
+        _ => return Err(CommentError::DuplicatePayload),
+    }
     let start = body.find(JSON_FENCE).ok_or(CommentError::MissingPayload)?;
     let json = &body[start + JSON_FENCE.len()..];
     let end = json.find("\n```").ok_or(CommentError::MissingPayload)?;
-    serde_json::from_str(&json[..end]).map_err(|_| CommentError::MalformedJson)
+    let payload: TelemetryPayload =
+        serde_json::from_str(&json[..end]).map_err(|_| CommentError::MalformedJson)?;
+    if payload.schema_version != crate::SCHEMA_VERSION {
+        return Err(CommentError::UnsupportedVersion(payload.schema_version));
+    }
+    Ok(payload)
 }

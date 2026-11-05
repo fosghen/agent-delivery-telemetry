@@ -31,3 +31,26 @@ fn parser_rejects_missing_marker_and_malformed_json() {
     let malformed = format!("{COMMENT_MARKER}\n```json\n{{\n```");
     assert_eq!(parse_comment(&malformed), Err(CommentError::MalformedJson));
 }
+
+#[test]
+fn parser_rejects_ambiguous_or_unsupported_payloads() {
+    let rendered = render_comment(&payload()).unwrap();
+    let duplicate_marker = format!("{rendered}\n{COMMENT_MARKER}");
+    assert_eq!(
+        parse_comment(&duplicate_marker),
+        Err(CommentError::DuplicateMarker)
+    );
+
+    let duplicate_payload = format!("{rendered}\n```json\n{{}}\n```");
+    assert_eq!(
+        parse_comment(&duplicate_payload),
+        Err(CommentError::DuplicatePayload)
+    );
+
+    let mut future = payload();
+    future.schema_version = 2;
+    assert_eq!(
+        parse_comment(&render_comment(&future).unwrap()),
+        Err(CommentError::UnsupportedVersion(2)),
+    );
+}
