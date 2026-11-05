@@ -93,7 +93,7 @@ impl<R> GhCommentPort<R> {
 }
 use serde::Deserialize;
 
-use crate::evidence::{CheckEvidence, CommitEvidence, PullRequestEvidence};
+use crate::evidence::{CheckEvidence, CommitEvidence, PullRequestEvidence, ReviewEvidence};
 use crate::publish::{CommentPort, CommentSnapshot};
 
 #[derive(Deserialize)]
@@ -161,6 +161,14 @@ struct ApiCheck {
     completed_at: Option<String>,
 }
 
+#[derive(Deserialize)]
+struct ApiReview {
+    id: u64,
+    user: ApiUser,
+    state: String,
+    submitted_at: Option<String>,
+}
+
 fn closing_issues(body: Option<&str>) -> Vec<u64> {
     body.into_iter()
         .flat_map(str::lines)
@@ -177,6 +185,38 @@ fn closing_issues(body: Option<&str>) -> Vec<u64> {
 }
 
 impl<R: CommandRunner> GhCommentPort<R> {
+    /// # Errors
+    ///
+    /// Returns a command or response-decoding error.
+    pub fn review_evidence(&mut self) -> Result<Vec<ReviewEvidence>, GhError<R::Error>> {
+        let endpoint = format!(
+            "repos/{}/pulls/{}/reviews",
+            self.repository, self.pull_request
+        );
+        let arguments = vec![
+            "api".to_owned(),
+            "--paginate".to_owned(),
+            "--slurp".to_owned(),
+            endpoint,
+        ];
+        let output = self
+            .runner
+            .run(&arguments, None)
+            .map_err(GhError::Command)?;
+        let pages: Vec<Vec<ApiReview>> =
+            serde_json::from_str(&output).map_err(|_| GhError::Decode)?;
+        Ok(pages
+            .into_iter()
+            .flatten()
+            .map(|value| ReviewEvidence {
+                id: value.id,
+                author: value.user.login,
+                state: value.state,
+                submitted_at: value.submitted_at,
+            })
+            .collect())
+    }
+
     /// # Errors
     ///
     /// Returns a command or response-decoding error.
