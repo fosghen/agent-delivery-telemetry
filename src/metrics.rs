@@ -1,7 +1,7 @@
 use serde::Serialize;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
-use crate::comment::{ReviewRecord, StageRecord, UsageRecord};
+use crate::comment::{ReviewRecord, StageRecord, UsagePrecision, UsageRecord};
 use crate::reconcile::ReconciledTrace;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -105,6 +105,70 @@ fn token_breakdown(record: &UsageRecord) -> TokenBreakdown {
         attempt: record.attempt,
         totals: record_totals(record),
     }
+}
+
+/// # Errors
+///
+/// Returns an error when exact token counts overflow.
+pub fn compute_token_metrics(trace: &ReconciledTrace) -> Result<TokenMetrics, MetricsError> {
+    let failed_attempts: Vec<u32> = trace
+        .telemetry
+        .attempts
+        .iter()
+        .filter(|attempt| attempt.outcome != "succeeded")
+        .map(|attempt| attempt.number)
+        .collect();
+    let mut exact_totals = TokenTotals::default();
+    let mut exact = Vec::new();
+    let mut session_totals = Vec::new();
+    let mut estimates = Vec::new();
+    let mut unavailable = Vec::new();
+    let mut failed_attempt_tokens = None;
+    let mut cache_compatible = true;
+    for record in &trace.telemetry.usage {
+        let value = token_breakdown(record);
+        match record.precision {
+            UsagePrecision::Exact => {
+                add_totals(&mut exact_totals, value.totals)?;
+                cache_compatible &=
+                    record.cached_input_tokens.is_none() || record.input_tokens.is_some();
+                if record
+                    .attempt
+                    .is_some_and(|attempt| failed_attempts.contains(&attempt))
+                {
+                    add_count(&mut failed_attempt_tokens, record.total_tokens)?;
+                }
+                exact.push(value);
+            }
+            UsagePrecision::SessionTotal => session_totals.push(value),
+            UsagePrecision::Estimated => estimates.push(value),
+            UsagePrecision::Unavailable => unavailable.push(value),
+        }
+    }
+    exact.sort();
+    session_totals.sort();
+    estimates.sort();
+    unavailable.sort();
+    let cache_share_bps = match (
+        cache_compatible,
+        exact_totals.cached_input,
+        exact_totals.input,
+    ) {
+        (true, Some(cached), Some(input)) if input > 0 && cached <= input => Some(
+            u32::try_from(cached.saturating_mul(10_000) / input)
+                .map_err(|_| MetricsError::Overflow)?,
+        ),
+        _ => None,
+    };
+    Ok(TokenMetrics {
+        exact_totals,
+        exact,
+        session_totals,
+        estimates,
+        unavailable,
+        cache_share_bps,
+        failed_attempt_tokens,
+    })
 }
 
 fn elapsed_ms(start: &str, finish: &str) -> Result<u64, MetricsError> {
