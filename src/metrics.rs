@@ -27,6 +27,19 @@ pub struct TraceMetrics {
     pub rework_ms: Option<u64>,
     pub rework_share_bps: Option<u32>,
     pub review: ReviewMetrics,
+    pub stages: Vec<StageMetric>,
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub struct StageMetric {
+    pub name: String,
+    pub duration_ms: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct TraceAnalysis {
+    pub delivery: TraceMetrics,
+    pub tokens: TokenMetrics,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -243,6 +256,18 @@ pub fn compute_trace_metrics(trace: &ReconciledTrace) -> Result<TraceMetrics, Me
             .then(|| u32::try_from(rework.saturating_mul(10_000) / active).ok())
             .flatten()
     });
+    let mut stages: Vec<_> = trace
+        .telemetry
+        .stages
+        .iter()
+        .filter_map(|stage| {
+            stage.duration_ms.map(|duration_ms| StageMetric {
+                name: stage.name.clone(),
+                duration_ms,
+            })
+        })
+        .collect();
+    stages.sort();
     Ok(TraceMetrics {
         pull_request: trace.evidence.pull_request.number,
         outcome: trace.evidence.pull_request.state.clone(),
@@ -255,5 +280,16 @@ pub fn compute_trace_metrics(trace: &ReconciledTrace) -> Result<TraceMetrics, Me
         rework_ms,
         rework_share_bps,
         review: review_metrics(&trace.telemetry.review)?,
+        stages,
+    })
+}
+
+/// # Errors
+///
+/// Returns an error when delivery or exact token metrics are invalid.
+pub fn analyze_trace(trace: &ReconciledTrace) -> Result<TraceAnalysis, MetricsError> {
+    Ok(TraceAnalysis {
+        delivery: compute_trace_metrics(trace)?,
+        tokens: compute_token_metrics(trace)?,
     })
 }
