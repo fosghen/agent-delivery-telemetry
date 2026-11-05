@@ -1,9 +1,12 @@
 use std::process::ExitCode;
-use std::{fs::OpenOptions, io::Write};
+use std::{
+    fs::OpenOptions,
+    io::{Read, Write},
+};
 
 use agent_delivery_telemetry::cli::{CliError, parse_collect_args, parse_publish_args, run};
 use agent_delivery_telemetry::codex_usage::{
-    UsageCaptureError, latest_snapshot, unavailable_usage,
+    UsageCaptureError, exact_exec_usage, latest_snapshot, unavailable_usage,
 };
 use agent_delivery_telemetry::comment::TelemetryPayload;
 use agent_delivery_telemetry::draft::WorkDraft;
@@ -35,10 +38,31 @@ fn execute() -> Result<(), (&'static str, u8)> {
         Some("begin") => execute_begin(&values),
         Some("finish") => execute_finish(&values),
         Some("refresh-tokens") => execute_refresh_tokens(&values),
+        Some("capture-codex-usage") => execute_capture_codex_usage(&values),
         Some("collect") => execute_collect(&values),
         Some("report") => execute_report(&values),
         _ => Err(("input", 2)),
     }
+}
+
+fn execute_capture_codex_usage(values: &[&str]) -> Result<(), (&'static str, u8)> {
+    let [output] = values else {
+        return Err(("input", 2));
+    };
+    let mut stream = String::new();
+    std::io::stdin()
+        .read_to_string(&mut stream)
+        .map_err(|_| ("io", 11))?;
+    let usage = exact_exec_usage(&stream).map_err(|_| ("tokens", 12))?;
+    let json = serde_json::to_string_pretty(&usage).map_err(|_| ("input", 2))?;
+    OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(output)
+        .and_then(|mut file| file.write_all(json.as_bytes()))
+        .map_err(|_| ("io", 11))?;
+    println!(r#"{{"action":"codex_usage_captured"}}"#);
+    Ok(())
 }
 
 fn execute_refresh_tokens(values: &[&str]) -> Result<(), (&'static str, u8)> {
