@@ -5,6 +5,8 @@ use crate::comment::{
     AttemptRecord, ReviewRecord, StageRecord, TelemetryPayload, VerificationRecord,
 };
 
+const MAX_DRAFT_AGE_MS: u64 = 7 * 24 * 60 * 60 * 1_000;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DraftError {
     Invalid,
@@ -62,6 +64,9 @@ impl WorkDraft {
         let finish = OffsetDateTime::parse(now, &Rfc3339).map_err(|_| DraftError::Invalid)?;
         let duration_ms = u64::try_from((finish - start).whole_milliseconds())
             .map_err(|_| DraftError::Invalid)?;
+        if duration_ms > MAX_DRAFT_AGE_MS {
+            return Err(DraftError::Stale);
+        }
         self.finished_at = Some(now.to_owned());
         Ok(TelemetryPayload {
             schema_version: crate::SCHEMA_VERSION,
