@@ -1,4 +1,5 @@
 use serde::Serialize;
+use std::collections::BTreeMap;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 use crate::comment::{ReviewRecord, StageRecord, UsagePrecision, UsageRecord};
@@ -63,6 +64,34 @@ pub struct PortfolioMetrics {
     pub confirmed_findings: u64,
     pub findings_per_review_milli: Option<u32>,
     pub stages: Vec<StagePercentiles>,
+}
+
+fn nearest_rank(sorted: &[u64], percentile: usize) -> u64 {
+    let rank = percentile.saturating_mul(sorted.len()).div_ceil(100);
+    sorted[rank.saturating_sub(1)]
+}
+
+fn aggregate_stages(traces: &[TraceAnalysis]) -> Result<Vec<StagePercentiles>, MetricsError> {
+    let mut groups: BTreeMap<String, Vec<u64>> = BTreeMap::new();
+    for stage in traces.iter().flat_map(|trace| &trace.delivery.stages) {
+        groups
+            .entry(stage.name.clone())
+            .or_default()
+            .push(stage.duration_ms);
+    }
+    groups
+        .into_iter()
+        .map(|(name, mut values)| {
+            values.sort_unstable();
+            Ok(StagePercentiles {
+                name,
+                samples: u32::try_from(values.len()).map_err(|_| MetricsError::Overflow)?,
+                p50_ms: nearest_rank(&values, 50),
+                p90_ms: nearest_rank(&values, 90),
+                p95_ms: nearest_rank(&values, 95),
+            })
+        })
+        .collect()
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
