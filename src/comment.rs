@@ -48,6 +48,20 @@ pub struct VerificationRecord {
     pub checks: u32,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "decision", rename_all = "snake_case")]
+pub enum ReviewRecord {
+    NotRequested,
+    Requested {
+        trigger: String,
+        requested_at: String,
+        completed_at: Option<String>,
+        outcome: Option<String>,
+        confirmed_findings: u32,
+        rework_ms: Option<u64>,
+    },
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum UsagePrecision {
