@@ -1,0 +1,18 @@
+name: Issues First
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  issues: read
+  pull-requests: read
+
+jobs:
+  issues-first:
+    name: issues-first
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require an earlier issue
+        uses: fosghen/issues-first-action@aebbef32f495ce15b81c0658f26c7ca59dba2981
