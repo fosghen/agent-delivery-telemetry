@@ -13,6 +13,10 @@ fn compatibility_fixture_produces_deterministic_versioned_json() {
     assert_eq!(first, second);
     assert_eq!(report.schema_version, REPORT_SCHEMA_VERSION);
     assert_eq!(report.portfolio.tokens_per_merged_issue, Some(130));
+    assert!(report.warnings.iter().any(|warning| matches!(
+        &warning.kind,
+        WarningKind::UnavailableMetric { name } if name == "delivery_lead_time"
+    )));
     assert!(report.warnings.iter().any(|warning| {
         matches!(
             warning.kind,

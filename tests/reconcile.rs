@@ -34,6 +34,7 @@ fn payload(head_sha: &str) -> TelemetryPayload {
     TelemetryPayload {
         schema_version: 1,
         head_sha: head_sha.to_owned(),
+        work_started_at: None,
         attempts: vec![],
         stages: vec![],
         verification: VerificationRecord {

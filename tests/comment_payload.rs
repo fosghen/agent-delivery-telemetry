@@ -7,6 +7,7 @@ fn core_payload_round_trips_as_json() {
     let payload = TelemetryPayload {
         schema_version: 1,
         head_sha: "abc".to_owned(),
+        work_started_at: None,
         attempts: vec![AttemptRecord {
             number: 1,
             outcome: "succeeded".to_owned(),

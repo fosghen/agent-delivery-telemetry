@@ -74,7 +74,10 @@ pub fn build_report(traces: Vec<ReconciledTrace>) -> Result<AnalysisReport, Metr
         }
         let analysis = analyze_trace(&trace)?;
         for (name, missing) in [
-            ("lead_time", analysis.delivery.lead_time_ms.is_none()),
+            (
+                "delivery_lead_time",
+                analysis.delivery.delivery_lead_time_ms.is_none(),
+            ),
             ("active_time", analysis.delivery.active_time_ms.is_none()),
             ("exact_tokens", analysis.tokens.exact_totals.total.is_none()),
         ] {

@@ -21,7 +21,8 @@ pub struct TraceMetrics {
     pub pull_request: u64,
     pub outcome: String,
     pub verification: String,
-    pub lead_time_ms: Option<u64>,
+    pub delivery_lead_time_ms: Option<u64>,
+    pub pr_cycle_time_ms: Option<u64>,
     pub active_time_ms: Option<u64>,
     pub wait_time_ms: Option<u64>,
     pub retries: u32,
@@ -281,7 +282,15 @@ fn review_metrics(review: &ReviewRecord) -> Result<ReviewMetrics, MetricsError> 
 ///
 /// Returns an error for invalid timestamps, durations, or arithmetic overflow.
 pub fn compute_trace_metrics(trace: &ReconciledTrace) -> Result<TraceMetrics, MetricsError> {
-    let lead_time_ms = trace
+    let delivery_lead_time_ms = trace
+        .evidence
+        .pull_request
+        .merged_at
+        .as_deref()
+        .zip(trace.telemetry.work_started_at.as_deref())
+        .map(|(merged, started)| elapsed_ms(started, merged))
+        .transpose()?;
+    let pr_cycle_time_ms = trace
         .evidence
         .pull_request
         .merged_at
@@ -289,7 +298,7 @@ pub fn compute_trace_metrics(trace: &ReconciledTrace) -> Result<TraceMetrics, Me
         .map(|merged| elapsed_ms(&trace.evidence.pull_request.created_at, merged))
         .transpose()?;
     let active_time_ms = total_duration(&trace.telemetry.stages)?;
-    let wait_time_ms = lead_time_ms
+    let wait_time_ms = delivery_lead_time_ms
         .zip(active_time_ms)
         .map(|(lead, active)| {
             lead.checked_sub(active)
@@ -325,7 +334,8 @@ pub fn compute_trace_metrics(trace: &ReconciledTrace) -> Result<TraceMetrics, Me
         pull_request: trace.evidence.pull_request.number,
         outcome: trace.evidence.pull_request.state.clone(),
         verification: trace.telemetry.verification.outcome.clone(),
-        lead_time_ms,
+        delivery_lead_time_ms,
+        pr_cycle_time_ms,
         active_time_ms,
         wait_time_ms,
         retries: u32::try_from(trace.telemetry.attempts.len().saturating_sub(1))
@@ -355,7 +365,7 @@ pub fn aggregate_metrics(traces: &[TraceAnalysis]) -> Result<PortfolioMetrics, M
     let trace_count = u32::try_from(traces.len()).map_err(|_| MetricsError::Overflow)?;
     let merged: Vec<_> = traces
         .iter()
-        .filter(|trace| trace.delivery.lead_time_ms.is_some())
+        .filter(|trace| trace.delivery.pr_cycle_time_ms.is_some())
         .collect();
     let merged_issues = merged.iter().try_fold(0_u32, |sum, trace| {
         sum.checked_add(trace.linked_issues)
