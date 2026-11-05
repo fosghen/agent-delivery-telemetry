@@ -70,3 +70,13 @@ Collection is read-only. Its JSON combines authoritative PR, commit, check, and
 review evidence with the owned `adt:v1` payload. Additional exit codes are `5`
 missing telemetry, `6` duplicate telemetry, `7` invalid telemetry, and `8` stale
 telemetry. Partial provider visibility is reported inside successful output.
+
+For the versioned metric report, replace `collect` with `report`:
+
+```sh
+cargo run -- report --repo fosghen/project --pr 42 --owner fosghen
+```
+
+The report includes the reconciled trace, delivery/rework/review/token metrics,
+portfolio aggregates, and visibility warnings. Metrics failures use exit code
+`9`; the command performs no GitHub mutations.
