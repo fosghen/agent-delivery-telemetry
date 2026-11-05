@@ -53,3 +53,58 @@ impl<T> Envelope<T> {
         }
     }
 }
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Timestamp(pub i64);
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AttemptOutcome {
+    Succeeded,
+    Failed,
+    Abandoned,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum StageKind {
+    Analysis,
+    Implementation,
+    Verification,
+    Rework,
+    Delivery,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Stage {
+    pub kind: StageKind,
+    pub started_at: Option<Timestamp>,
+    pub finished_at: Option<Timestamp>,
+}
+
+impl Stage {
+    #[must_use]
+    pub fn new(kind: StageKind) -> Self {
+        Self {
+            kind,
+            started_at: None,
+            finished_at: None,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Attempt {
+    pub number: u32,
+    pub outcome: Option<AttemptOutcome>,
+    pub stages: Vec<Stage>,
+}
+
+impl Attempt {
+    #[must_use]
+    pub fn new(number: u32) -> Self {
+        Self {
+            number,
+            outcome: None,
+            stages: Vec::new(),
+        }
+    }
+}
