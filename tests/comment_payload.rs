@@ -6,6 +6,7 @@ use agent_delivery_telemetry::comment::{
 fn core_payload_round_trips_as_json() {
     let payload = TelemetryPayload {
         schema_version: 1,
+        head_sha: "abc".to_owned(),
         attempts: vec![AttemptRecord {
             number: 1,
             outcome: "succeeded".to_owned(),

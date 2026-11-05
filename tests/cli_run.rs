@@ -27,6 +27,7 @@ impl CommentPort for FakePort {
 
 const PAYLOAD: &str = r#"{
   "schema_version": 1,
+  "head_sha": "abc",
   "attempts": [],
   "stages": [],
   "verification": {"outcome": "passed", "checks": 3},
