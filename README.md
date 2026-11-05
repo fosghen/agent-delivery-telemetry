@@ -52,6 +52,22 @@ RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps --all-features
 Authenticate with `gh auth login`; the token needs pull-request read and issue
 comment write access.
 
+Before coding, record the task start in an explicit local draft:
+
+```sh
+cargo run -- begin fosghen/project 42 /tmp/issue-42.json
+```
+
+After checks pass and the PR head exists, finish the draft. The final argument
+is the number of verification checks and the output is a publishable payload:
+
+```sh
+cargo run -- finish fosghen/project /tmp/issue-42.json HEAD_SHA 4 /tmp/payload.json
+```
+
+Finishing marks the draft consumed. Drafts older than seven days, reused drafts,
+repository mismatches, and blank revisions fail instead of producing telemetry.
+
 ```sh
 cargo run -- publish --repo fosghen/project --pr 42 \
   --owner fosghen --payload trace.json --dry-run
