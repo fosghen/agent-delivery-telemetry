@@ -146,3 +146,55 @@ pub struct Event {
     pub observed_at: Timestamp,
     pub source_at: Option<Timestamp>,
 }
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ReviewTrigger {
+    SchemaMigration,
+    Concurrency,
+    Security,
+    ExternalSideEffect,
+    CorrectnessUncertainty,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ReviewSpan {
+    pub requested_at: Timestamp,
+    pub completed_at: Option<Timestamp>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum Review {
+    NotRequested,
+    Requested {
+        trigger: ReviewTrigger,
+        span: Option<ReviewSpan>,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TraceOutcome {
+    Merged,
+    Abandoned,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Trace {
+    pub id: TraceId,
+    pub attempts: Vec<Attempt>,
+    pub events: Vec<Event>,
+    pub review: Review,
+    pub outcome: Option<TraceOutcome>,
+}
+
+impl Trace {
+    #[must_use]
+    pub fn new(id: TraceId) -> Self {
+        Self {
+            id,
+            attempts: Vec::new(),
+            events: Vec::new(),
+            review: Review::NotRequested,
+            outcome: None,
+        }
+    }
+}
