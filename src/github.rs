@@ -93,7 +93,7 @@ impl<R> GhCommentPort<R> {
 }
 use serde::Deserialize;
 
-use crate::evidence::PullRequestEvidence;
+use crate::evidence::{CommitEvidence, PullRequestEvidence};
 use crate::publish::{CommentPort, CommentSnapshot};
 
 #[derive(Deserialize)]
@@ -129,6 +129,23 @@ struct ApiPullRequest {
     body: Option<String>,
 }
 
+#[derive(Deserialize)]
+struct ApiCommitDate {
+    date: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct ApiCommitMetadata {
+    author: ApiCommitDate,
+    committer: ApiCommitDate,
+}
+
+#[derive(Deserialize)]
+struct ApiCommit {
+    sha: String,
+    commit: ApiCommitMetadata,
+}
+
 fn closing_issues(body: Option<&str>) -> Vec<u64> {
     body.into_iter()
         .flat_map(str::lines)
@@ -145,6 +162,39 @@ fn closing_issues(body: Option<&str>) -> Vec<u64> {
 }
 
 impl<R: CommandRunner> GhCommentPort<R> {
+    /// # Errors
+    ///
+    /// Returns a command or response-decoding error.
+    pub fn commit_evidence(&mut self) -> Result<Vec<CommitEvidence>, GhError<R::Error>> {
+        let endpoint = format!(
+            "repos/{}/pulls/{}/commits",
+            self.repository, self.pull_request
+        );
+        let arguments = vec![
+            "api".to_owned(),
+            "--paginate".to_owned(),
+            "--slurp".to_owned(),
+            endpoint,
+        ];
+        let output = self
+            .runner
+            .run(&arguments, None)
+            .map_err(GhError::Command)?;
+        let pages: Vec<Vec<ApiCommit>> =
+            serde_json::from_str(&output).map_err(|_| GhError::Decode)?;
+        pages
+            .into_iter()
+            .flatten()
+            .map(|value| {
+                Ok(CommitEvidence {
+                    sha: value.sha,
+                    authored_at: value.commit.author.date,
+                    committed_at: value.commit.committer.date.ok_or(GhError::Decode)?,
+                })
+            })
+            .collect()
+    }
+
     /// # Errors
     ///
     /// Returns a command or response-decoding error.
