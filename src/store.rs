@@ -13,7 +13,7 @@ const MIGRATION_1: &str = "
         trace_id TEXT NOT NULL,
         idempotency_key TEXT NOT NULL UNIQUE,
         observed_at INTEGER NOT NULL,
-        payload TEXT NOT NULL
+        payload TEXT NOT NULL CHECK(length(payload) > 0)
     );
     INSERT INTO schema_migrations(version) VALUES (1);
 ";
@@ -116,5 +116,28 @@ impl Store {
             })
         })?;
         rows.collect()
+    }
+
+    /// # Errors
+    ///
+    /// Returns an error and rolls back the batch when any event cannot be stored.
+    pub fn append_batch(&mut self, events: &[NewEvent]) -> Result<usize> {
+        let transaction = self.connection.transaction()?;
+        let mut inserted = 0;
+        for event in events {
+            inserted += transaction.execute(
+                "INSERT INTO events
+                 (trace_id, idempotency_key, observed_at, payload)
+                 VALUES (?1, ?2, ?3, ?4)",
+                params![
+                    event.trace_id.as_str(),
+                    event.key.as_str(),
+                    event.observed_at.0,
+                    event.payload,
+                ],
+            )?;
+        }
+        transaction.commit()?;
+        Ok(inserted)
     }
 }
