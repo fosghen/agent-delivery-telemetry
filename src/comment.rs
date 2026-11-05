@@ -10,6 +10,7 @@ pub enum CommentError {
     MissingPayload,
     DuplicatePayload,
     MalformedJson,
+    InvalidUsage,
     UnsupportedVersion(u16),
 }
 
@@ -159,5 +160,6 @@ pub fn parse_comment(comment: &str) -> Result<TelemetryPayload, CommentError> {
     if payload.schema_version != crate::SCHEMA_VERSION {
         return Err(CommentError::UnsupportedVersion(payload.schema_version));
     }
+    validate_usage(&payload.usage).map_err(|_| CommentError::InvalidUsage)?;
     Ok(payload)
 }

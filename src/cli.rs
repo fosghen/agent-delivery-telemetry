@@ -92,7 +92,7 @@ pub fn parse_publish_args(arguments: &[&str]) -> Result<PublishArgs, ParseError>
         dry_run,
     })
 }
-use crate::comment::{TelemetryPayload, render_comment};
+use crate::comment::{TelemetryPayload, render_comment, validate_usage};
 use crate::publish::{
     CommentPort, PublishError, PublishOutcome, UpsertDecision, decide_upsert, publish,
 };
@@ -107,6 +107,7 @@ pub fn run<P: CommentPort>(
     dry_run: bool,
 ) -> Result<CliOutcome, CliError<P::Error>> {
     let payload: TelemetryPayload = serde_json::from_str(payload).map_err(|_| CliError::Input)?;
+    validate_usage(&payload.usage).map_err(|_| CliError::Input)?;
     let desired = render_comment(&payload).map_err(|_| CliError::Input)?;
     if dry_run {
         let comments = port.list().map_err(CliError::Transport)?;
