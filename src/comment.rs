@@ -1,6 +1,14 @@
 use serde::{Deserialize, Serialize};
 
 pub const COMMENT_MARKER: &str = "<!-- adt:v1 -->";
+const JSON_FENCE: &str = "```json\n";
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CommentError {
+    MissingMarker,
+    MissingPayload,
+    MalformedJson,
+}
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -79,4 +87,18 @@ pub fn render_comment(payload: &TelemetryPayload) -> serde_json::Result<String> 
         payload.verification.checks,
         payload.usage.len(),
     ))
+}
+
+/// # Errors
+///
+/// Returns an error when the marker, JSON block, or payload is invalid.
+pub fn parse_comment(comment: &str) -> Result<TelemetryPayload, CommentError> {
+    let marker = comment
+        .find(COMMENT_MARKER)
+        .ok_or(CommentError::MissingMarker)?;
+    let body = &comment[marker + COMMENT_MARKER.len()..];
+    let start = body.find(JSON_FENCE).ok_or(CommentError::MissingPayload)?;
+    let json = &body[start + JSON_FENCE.len()..];
+    let end = json.find("\n```").ok_or(CommentError::MissingPayload)?;
+    serde_json::from_str(&json[..end]).map_err(|_| CommentError::MalformedJson)
 }
