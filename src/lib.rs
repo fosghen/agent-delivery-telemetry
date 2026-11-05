@@ -2,6 +2,7 @@
 
 pub mod cli;
 pub mod comment;
+pub mod evidence;
 pub mod github;
 pub mod publish;
 pub mod schema;
