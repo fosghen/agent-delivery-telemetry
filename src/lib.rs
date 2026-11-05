@@ -1,5 +1,6 @@
 #![doc = "Core types for agent delivery telemetry."]
 
+pub mod comment;
 pub mod schema;
 
 /// Current persisted schema version.
