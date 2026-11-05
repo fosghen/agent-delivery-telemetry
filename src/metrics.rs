@@ -42,6 +42,29 @@ pub struct TraceAnalysis {
     pub tokens: TokenMetrics,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct StagePercentiles {
+    pub name: String,
+    pub samples: u32,
+    pub p50_ms: u64,
+    pub p90_ms: u64,
+    pub p95_ms: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct PortfolioMetrics {
+    pub traces: u32,
+    pub merged_issues: u32,
+    pub exact_token_traces: u32,
+    pub tokens_per_merged_issue: Option<u64>,
+    pub failed_attempt_tokens: Option<u64>,
+    pub review_requests: u32,
+    pub review_invocation_bps: Option<u32>,
+    pub confirmed_findings: u64,
+    pub findings_per_review_milli: Option<u32>,
+    pub stages: Vec<StagePercentiles>,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MetricsError {
     InvalidTimestamp,
