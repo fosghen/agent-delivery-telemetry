@@ -5,6 +5,7 @@ pub mod comment;
 pub mod evidence;
 pub mod github;
 pub mod publish;
+pub mod reconcile;
 pub mod schema;
 
 /// Current persisted schema version.
