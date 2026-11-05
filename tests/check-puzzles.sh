@@ -13,14 +13,14 @@ printf '%s\n' '// @todo #16:30min Explain the deferred behavior and completion c
 printf '%s\n' '// TODO: silently deferred work' > "$invalid"
 printf '%s\n' '// @todo #16:30min Too short.' > "$short"
 
-"$checker" "$valid"
+CHECK_PUZZLE_ISSUES=0 "$checker" "$valid"
 
-if "$checker" "$invalid"; then
+if CHECK_PUZZLE_ISSUES=0 "$checker" "$invalid"; then
   echo "bare marker unexpectedly passed" >&2
   exit 1
 fi
 
-if "$checker" "$short"; then
+if CHECK_PUZZLE_ISSUES=0 "$checker" "$short"; then
   echo "underspecified puzzle unexpectedly passed" >&2
   exit 1
 fi
