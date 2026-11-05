@@ -19,6 +19,7 @@ fn core_payload_round_trips_as_json() {
             outcome: "passed".to_owned(),
             checks: 4,
         },
+        usage: Vec::new(),
     };
 
     let json = serde_json::to_string(&payload).unwrap();
