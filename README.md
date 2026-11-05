@@ -46,3 +46,16 @@ cargo clippy --locked --all-targets --all-features -- -D warnings
 cargo test --locked --all-features
 RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps --all-features
 ```
+
+## Publish telemetry
+
+Authenticate with `gh auth login`; the token needs pull-request read and issue
+comment write access.
+
+```sh
+cargo run -- publish --repo fosghen/project --pr 42 \
+  --owner fosghen --payload trace.json --dry-run
+```
+
+Remove `--dry-run` to write the `adt:v1` comment. The command emits one JSON
+object. Exit codes are `0` success, `2` input, `3` conflict, and `4` transport.
