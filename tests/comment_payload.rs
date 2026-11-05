@@ -1,5 +1,5 @@
 use agent_delivery_telemetry::comment::{
-    AttemptRecord, StageRecord, TelemetryPayload, VerificationRecord,
+    AttemptRecord, ReviewRecord, StageRecord, TelemetryPayload, VerificationRecord,
 };
 
 #[test]
@@ -20,6 +20,7 @@ fn core_payload_round_trips_as_json() {
             outcome: "passed".to_owned(),
             checks: 4,
         },
+        review: ReviewRecord::NotRequested,
         usage: Vec::new(),
     };
 

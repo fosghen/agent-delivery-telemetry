@@ -23,6 +23,7 @@ pub struct TelemetryPayload {
     pub attempts: Vec<AttemptRecord>,
     pub stages: Vec<StageRecord>,
     pub verification: VerificationRecord,
+    pub review: ReviewRecord,
     pub usage: Vec<UsageRecord>,
 }
 
@@ -46,6 +47,20 @@ pub struct StageRecord {
 pub struct VerificationRecord {
     pub outcome: String,
     pub checks: u32,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "decision", rename_all = "snake_case")]
+pub enum ReviewRecord {
+    NotRequested,
+    Requested {
+        trigger: String,
+        requested_at: String,
+        completed_at: Option<String>,
+        outcome: Option<String>,
+        confirmed_findings: u32,
+        rework_ms: Option<u64>,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]

@@ -1,5 +1,5 @@
 use agent_delivery_telemetry::comment::{
-    COMMENT_MARKER, TelemetryPayload, VerificationRecord, render_comment,
+    COMMENT_MARKER, ReviewRecord, TelemetryPayload, VerificationRecord, render_comment,
 };
 
 #[test]
@@ -13,6 +13,7 @@ fn rendered_comment_has_human_summary_and_machine_payload() {
             outcome: "passed".to_owned(),
             checks: 3,
         },
+        review: ReviewRecord::NotRequested,
         usage: Vec::new(),
     };
 

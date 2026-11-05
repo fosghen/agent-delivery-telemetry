@@ -1,6 +1,6 @@
 use agent_delivery_telemetry::comment::{
-    COMMENT_MARKER, CommentError, TelemetryPayload, VerificationRecord, parse_comment,
-    render_comment,
+    COMMENT_MARKER, CommentError, ReviewRecord, TelemetryPayload, VerificationRecord,
+    parse_comment, render_comment,
 };
 
 fn payload() -> TelemetryPayload {
@@ -13,6 +13,7 @@ fn payload() -> TelemetryPayload {
             outcome: "passed".to_owned(),
             checks: 1,
         },
+        review: ReviewRecord::NotRequested,
         usage: Vec::new(),
     }
 }
