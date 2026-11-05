@@ -34,3 +34,15 @@ fn changed_comment_is_updated_and_equal_comment_is_unchanged() {
         UpsertDecision::Unchanged { id: 7 },
     );
 }
+
+#[test]
+fn selection_ignores_unowned_comments_and_rejects_multiple_owned_comments() {
+    let desired = format!("{COMMENT_MARKER}\nnew");
+    let mut unowned = comment(&desired);
+    unowned.author = "other".to_owned();
+    assert!(matches!(
+        decide_upsert(&[unowned], "bot", &desired),
+        Ok(UpsertDecision::Create { .. }),
+    ));
+    assert!(decide_upsert(&[comment(&desired), comment(&desired)], "bot", &desired).is_err());
+}

@@ -19,6 +19,36 @@ pub enum UpsertError {
     MultipleEligibleComments,
 }
 
+pub trait CommentPort {
+    type Error;
+
+    /// # Errors
+    ///
+    /// Returns a provider-specific transport error.
+    fn list(&mut self) -> Result<Vec<CommentSnapshot>, Self::Error>;
+    /// # Errors
+    ///
+    /// Returns a provider-specific transport error.
+    fn create(&mut self, body: &str) -> Result<u64, Self::Error>;
+    /// # Errors
+    ///
+    /// Returns a provider-specific transport error.
+    fn update(&mut self, id: u64, body: &str) -> Result<(), Self::Error>;
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PublishOutcome {
+    Created { id: u64 },
+    Updated { id: u64 },
+    Unchanged { id: u64 },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum PublishError<E> {
+    Transport(E),
+    Selection(UpsertError),
+}
+
 /// # Errors
 ///
 /// Returns an error when more than one owned telemetry comment exists.
