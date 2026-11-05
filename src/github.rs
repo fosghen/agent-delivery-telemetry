@@ -60,6 +60,11 @@ struct ApiComment {
     body: String,
 }
 
+#[derive(Deserialize)]
+struct ApiIdentifier {
+    id: u64,
+}
+
 impl<R: CommandRunner> GhCommentPort<R> {
     /// # Errors
     ///
@@ -90,5 +95,30 @@ impl<R: CommandRunner> GhCommentPort<R> {
                 body: comment.body,
             })
             .collect())
+    }
+
+    /// # Errors
+    ///
+    /// Returns a command or response-decoding error.
+    pub fn create_comment(&mut self, body: &str) -> Result<u64, GhError<R::Error>> {
+        let endpoint = format!(
+            "repos/{}/issues/{}/comments",
+            self.repository, self.pull_request
+        );
+        let arguments = vec![
+            "api".to_owned(),
+            "--method".to_owned(),
+            "POST".to_owned(),
+            endpoint,
+            "--input".to_owned(),
+            "-".to_owned(),
+        ];
+        let input = serde_json::json!({ "body": body }).to_string();
+        let output = self
+            .runner
+            .run(&arguments, Some(&input))
+            .map_err(GhError::Command)?;
+        let response: ApiIdentifier = serde_json::from_str(&output).map_err(|_| GhError::Decode)?;
+        Ok(response.id)
     }
 }
