@@ -1,4 +1,6 @@
-use agent_delivery_telemetry::cli::{PublishArgs, parse_publish_args};
+use agent_delivery_telemetry::cli::{
+    CollectArgs, PublishArgs, parse_collect_args, parse_publish_args,
+};
 
 #[test]
 fn publish_arguments_require_explicit_target_and_payload() {
@@ -51,4 +53,25 @@ fn complete_arguments(
         "--payload",
         "trace.json",
     ])
+}
+
+#[test]
+fn collect_arguments_require_an_explicit_target_and_owner() {
+    assert_eq!(
+        parse_collect_args(&[
+            "--repo",
+            "fosghen/project",
+            "--pr",
+            "42",
+            "--owner",
+            "fosghen"
+        ])
+        .unwrap(),
+        CollectArgs {
+            repository: "fosghen/project".to_owned(),
+            pull_request: 42,
+            owner: "fosghen".to_owned(),
+        }
+    );
+    assert!(parse_collect_args(&["--repo", "fosghen/project"]).is_err());
 }
