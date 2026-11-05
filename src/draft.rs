@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
+use crate::codex_usage::{TokenSnapshot, UsageCaptureError, latest_snapshot, session_delta};
 use crate::comment::{
-    AttemptRecord, ReviewRecord, StageRecord, TelemetryPayload, VerificationRecord,
+    AttemptRecord, ReviewRecord, StageRecord, TelemetryPayload, UsageRecord, VerificationRecord,
 };
 
 const MAX_DRAFT_AGE_MS: u64 = 7 * 24 * 60 * 60 * 1_000;
@@ -23,6 +24,10 @@ pub struct WorkDraft {
     pub issue: u64,
     pub work_started_at: String,
     pub finished_at: Option<String>,
+    #[serde(default)]
+    pub session_log: Option<String>,
+    #[serde(default)]
+    pub token_baseline: Option<TokenSnapshot>,
 }
 
 impl WorkDraft {
@@ -41,7 +46,24 @@ impl WorkDraft {
             issue,
             work_started_at: now.to_owned(),
             finished_at: None,
+            session_log: None,
+            token_baseline: None,
         })
+    }
+
+    pub fn attach_token_source(&mut self, session_log: &str, baseline: TokenSnapshot) {
+        self.session_log = Some(session_log.to_owned());
+        self.token_baseline = Some(baseline);
+    }
+
+    /// # Errors
+    /// Returns an error when token metadata is missing, unchanged, or invalid.
+    pub fn token_usage(&self, session_json_lines: &str) -> Result<UsageRecord, UsageCaptureError> {
+        let baseline = self
+            .token_baseline
+            .as_ref()
+            .ok_or(UsageCaptureError::Missing)?;
+        session_delta(baseline, &latest_snapshot(session_json_lines)?)
     }
 
     /// # Errors
