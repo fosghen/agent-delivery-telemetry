@@ -6,6 +6,7 @@ use agent_delivery_telemetry::comment::{
 fn payload() -> TelemetryPayload {
     TelemetryPayload {
         schema_version: 1,
+        head_sha: "abc".to_owned(),
         attempts: Vec::new(),
         stages: Vec::new(),
         verification: VerificationRecord {
@@ -52,5 +53,15 @@ fn parser_rejects_ambiguous_or_unsupported_payloads() {
     assert_eq!(
         parse_comment(&render_comment(&future).unwrap()),
         Err(CommentError::UnsupportedVersion(2)),
+    );
+}
+
+#[test]
+fn parser_rejects_blank_head_revision() {
+    let mut value = payload();
+    value.head_sha = " ".to_owned();
+    assert_eq!(
+        parse_comment(&render_comment(&value).unwrap()),
+        Err(CommentError::BlankHeadRevision)
     );
 }
