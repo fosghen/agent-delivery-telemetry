@@ -1,0 +1,17 @@
+[package]
+name = "agent-delivery-telemetry"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99"
+description = "Local-first telemetry for agent-driven software delivery"
+license = "MIT"
+repository = "https://github.com/fosghen/agent-delivery-telemetry"
+
+[lib]
+name = "agent_delivery_telemetry"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+pedantic = "deny"
