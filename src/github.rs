@@ -19,6 +19,20 @@ pub enum GhCommandError {
     Output,
 }
 
+pub trait ClassifyFailure {
+    fn failure_kind(&self) -> crate::evidence::EvidenceFailureKind;
+}
+
+impl ClassifyFailure for GhCommandError {
+    fn failure_kind(&self) -> crate::evidence::EvidenceFailureKind {
+        use crate::evidence::EvidenceFailureKind::{Command, RateLimited};
+        match self {
+            Self::RateLimited => RateLimited,
+            Self::Start | Self::Input | Self::Failed(_) | Self::Output => Command,
+        }
+    }
+}
+
 fn command_failure(code: Option<i32>, stderr: &[u8]) -> GhCommandError {
     let message = String::from_utf8_lossy(stderr).to_ascii_lowercase();
     if message.contains("rate limit") || message.contains("http 429") {
@@ -85,6 +99,42 @@ mod tests {
 pub enum GhError<E> {
     Command(E),
     Decode,
+}
+
+fn failure_kind<E: ClassifyFailure>(error: &GhError<E>) -> crate::evidence::EvidenceFailureKind {
+    match error {
+        GhError::Command(error) => error.failure_kind(),
+        GhError::Decode => crate::evidence::EvidenceFailureKind::Decode,
+    }
+}
+
+fn fetch_optional<T, E: ClassifyFailure>(
+    source: crate::evidence::EvidenceSource,
+    mut fetch: impl FnMut() -> Result<Vec<T>, GhError<E>>,
+) -> (Vec<T>, bool, Option<crate::evidence::EvidenceFailure>) {
+    use crate::evidence::{EvidenceFailure, EvidenceFailureKind};
+    match fetch() {
+        Ok(values) => (values, true, None),
+        Err(error) if failure_kind(&error) == EvidenceFailureKind::Command => match fetch() {
+            Ok(values) => (values, true, None),
+            Err(_) => (
+                Vec::new(),
+                false,
+                Some(EvidenceFailure {
+                    source,
+                    kind: EvidenceFailureKind::RetryExhausted,
+                }),
+            ),
+        },
+        Err(error) => (
+            Vec::new(),
+            false,
+            Some(EvidenceFailure {
+                source,
+                kind: failure_kind(&error),
+            }),
+        ),
+    }
 }
 
 pub struct GhCommentPort<R> {
