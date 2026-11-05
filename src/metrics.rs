@@ -1,4 +1,5 @@
 use serde::Serialize;
+use std::collections::BTreeMap;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 use crate::comment::{ReviewRecord, StageRecord, UsagePrecision, UsageRecord};
@@ -27,6 +28,71 @@ pub struct TraceMetrics {
     pub rework_ms: Option<u64>,
     pub rework_share_bps: Option<u32>,
     pub review: ReviewMetrics,
+    pub stages: Vec<StageMetric>,
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub struct StageMetric {
+    pub name: String,
+    pub duration_ms: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct TraceAnalysis {
+    pub linked_issues: u32,
+    pub delivery: TraceMetrics,
+    pub tokens: TokenMetrics,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct StagePercentiles {
+    pub name: String,
+    pub samples: u32,
+    pub p50_ms: u64,
+    pub p90_ms: u64,
+    pub p95_ms: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct PortfolioMetrics {
+    pub traces: u32,
+    pub merged_issues: u32,
+    pub exact_token_traces: u32,
+    pub tokens_per_merged_issue: Option<u64>,
+    pub failed_attempt_tokens: Option<u64>,
+    pub review_requests: u32,
+    pub review_invocation_bps: Option<u32>,
+    pub confirmed_findings: u64,
+    pub findings_per_review_milli: Option<u32>,
+    pub stages: Vec<StagePercentiles>,
+}
+
+fn nearest_rank(sorted: &[u64], percentile: usize) -> u64 {
+    let rank = percentile.saturating_mul(sorted.len()).div_ceil(100);
+    sorted[rank.saturating_sub(1)]
+}
+
+fn aggregate_stages(traces: &[TraceAnalysis]) -> Result<Vec<StagePercentiles>, MetricsError> {
+    let mut groups: BTreeMap<String, Vec<u64>> = BTreeMap::new();
+    for stage in traces.iter().flat_map(|trace| &trace.delivery.stages) {
+        groups
+            .entry(stage.name.clone())
+            .or_default()
+            .push(stage.duration_ms);
+    }
+    groups
+        .into_iter()
+        .map(|(name, mut values)| {
+            values.sort_unstable();
+            Ok(StagePercentiles {
+                name,
+                samples: u32::try_from(values.len()).map_err(|_| MetricsError::Overflow)?,
+                p50_ms: nearest_rank(&values, 50),
+                p90_ms: nearest_rank(&values, 90),
+                p95_ms: nearest_rank(&values, 95),
+            })
+        })
+        .collect()
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -243,6 +309,18 @@ pub fn compute_trace_metrics(trace: &ReconciledTrace) -> Result<TraceMetrics, Me
             .then(|| u32::try_from(rework.saturating_mul(10_000) / active).ok())
             .flatten()
     });
+    let mut stages: Vec<_> = trace
+        .telemetry
+        .stages
+        .iter()
+        .filter_map(|stage| {
+            stage.duration_ms.map(|duration_ms| StageMetric {
+                name: stage.name.clone(),
+                duration_ms,
+            })
+        })
+        .collect();
+    stages.sort();
     Ok(TraceMetrics {
         pull_request: trace.evidence.pull_request.number,
         outcome: trace.evidence.pull_request.state.clone(),
@@ -255,5 +333,90 @@ pub fn compute_trace_metrics(trace: &ReconciledTrace) -> Result<TraceMetrics, Me
         rework_ms,
         rework_share_bps,
         review: review_metrics(&trace.telemetry.review)?,
+        stages,
+    })
+}
+
+/// # Errors
+///
+/// Returns an error when delivery or exact token metrics are invalid.
+pub fn analyze_trace(trace: &ReconciledTrace) -> Result<TraceAnalysis, MetricsError> {
+    Ok(TraceAnalysis {
+        linked_issues: u32::try_from(trace.evidence.linked_issues.len())
+            .map_err(|_| MetricsError::Overflow)?,
+        delivery: compute_trace_metrics(trace)?,
+        tokens: compute_token_metrics(trace)?,
+    })
+}
+
+/// # Errors
+/// Returns an error when aggregate counts overflow.
+pub fn aggregate_metrics(traces: &[TraceAnalysis]) -> Result<PortfolioMetrics, MetricsError> {
+    let trace_count = u32::try_from(traces.len()).map_err(|_| MetricsError::Overflow)?;
+    let merged: Vec<_> = traces
+        .iter()
+        .filter(|trace| trace.delivery.lead_time_ms.is_some())
+        .collect();
+    let merged_issues = merged.iter().try_fold(0_u32, |sum, trace| {
+        sum.checked_add(trace.linked_issues)
+            .ok_or(MetricsError::Overflow)
+    })?;
+    let exact_token_traces = merged
+        .iter()
+        .filter(|trace| trace.tokens.exact_totals.total.is_some())
+        .count()
+        .try_into()
+        .map_err(|_| MetricsError::Overflow)?;
+    let exact_tokens = merged.iter().try_fold(Some(0_u64), |sum, trace| {
+        match (sum, trace.tokens.exact_totals.total) {
+            (Some(sum), Some(value)) => sum
+                .checked_add(value)
+                .map(Some)
+                .ok_or(MetricsError::Overflow),
+            _ => Ok(None),
+        }
+    })?;
+    let tokens_per_merged_issue = exact_tokens
+        .filter(|_| merged_issues > 0)
+        .map(|tokens| tokens / u64::from(merged_issues));
+    let failed_attempt_tokens = traces.iter().try_fold(Some(0_u64), |sum, trace| {
+        let value = trace
+            .tokens
+            .failed_attempt_tokens
+            .or((trace.delivery.retries == 0).then_some(0));
+        match (sum, value) {
+            (Some(sum), Some(value)) => sum
+                .checked_add(value)
+                .map(Some)
+                .ok_or(MetricsError::Overflow),
+            _ => Ok(None),
+        }
+    })?;
+    let requested: Vec<_> = traces
+        .iter()
+        .filter_map(|trace| match trace.delivery.review {
+            ReviewMetrics::Requested {
+                confirmed_findings, ..
+            } => Some(confirmed_findings),
+            ReviewMetrics::NotRequested => None,
+        })
+        .collect();
+    let review_requests = u32::try_from(requested.len()).map_err(|_| MetricsError::Overflow)?;
+    let confirmed_findings = requested.iter().map(|value| u64::from(*value)).sum::<u64>();
+    let findings_per_review_milli = (review_requests > 0)
+        .then_some(confirmed_findings.saturating_mul(1_000) / u64::from(review_requests))
+        .and_then(|value| u32::try_from(value).ok());
+    Ok(PortfolioMetrics {
+        traces: trace_count,
+        merged_issues,
+        exact_token_traces,
+        tokens_per_merged_issue,
+        failed_attempt_tokens,
+        review_requests,
+        review_invocation_bps: (trace_count > 0)
+            .then_some(review_requests.saturating_mul(10_000) / trace_count),
+        confirmed_findings,
+        findings_per_review_milli,
+        stages: aggregate_stages(traces)?,
     })
 }
