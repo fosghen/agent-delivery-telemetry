@@ -31,6 +31,7 @@ const PAYLOAD: &str = r#"{
   "attempts": [],
   "stages": [],
   "verification": {"outcome": "passed", "checks": 3},
+  "review": {"decision": "not_requested"},
   "usage": []
 }"#;
 

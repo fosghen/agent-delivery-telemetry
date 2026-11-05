@@ -1,4 +1,6 @@
-use agent_delivery_telemetry::comment::{TelemetryPayload, VerificationRecord, render_comment};
+use agent_delivery_telemetry::comment::{
+    ReviewRecord, TelemetryPayload, VerificationRecord, render_comment,
+};
 use agent_delivery_telemetry::evidence::{
     EvidenceSnapshot, EvidenceVisibility, PullRequestEvidence,
 };
@@ -38,6 +40,7 @@ fn payload(head_sha: &str) -> TelemetryPayload {
             outcome: "passed".to_owned(),
             checks: 3,
         },
+        review: ReviewRecord::NotRequested,
         usage: vec![],
     }
 }
