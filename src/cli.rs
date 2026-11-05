@@ -7,6 +7,13 @@ pub struct PublishArgs {
     pub dry_run: bool,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CollectArgs {
+    pub repository: String,
+    pub pull_request: u64,
+    pub owner: String,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ParseError;
 
@@ -90,6 +97,26 @@ pub fn parse_publish_args(arguments: &[&str]) -> Result<PublishArgs, ParseError>
         owner,
         payload,
         dry_run,
+    })
+}
+
+/// # Errors
+///
+/// Returns an error for unknown, missing, or invalid arguments.
+pub fn parse_collect_args(arguments: &[&str]) -> Result<CollectArgs, ParseError> {
+    if arguments
+        .iter()
+        .any(|argument| matches!(*argument, "--payload" | "--dry-run"))
+    {
+        return Err(ParseError);
+    }
+    let mut augmented = arguments.to_vec();
+    augmented.extend(["--payload", "internal"]);
+    let parsed = parse_publish_args(&augmented)?;
+    Ok(CollectArgs {
+        repository: parsed.repository,
+        pull_request: parsed.pull_request,
+        owner: parsed.owner,
     })
 }
 use crate::comment::{TelemetryPayload, render_comment, validate_usage};
