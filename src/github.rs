@@ -93,7 +93,7 @@ impl<R> GhCommentPort<R> {
 }
 use serde::Deserialize;
 
-use crate::evidence::{CommitEvidence, PullRequestEvidence};
+use crate::evidence::{CheckEvidence, CommitEvidence, PullRequestEvidence};
 use crate::publish::{CommentPort, CommentSnapshot};
 
 #[derive(Deserialize)]
@@ -146,6 +146,21 @@ struct ApiCommit {
     commit: ApiCommitMetadata,
 }
 
+#[derive(Deserialize)]
+struct ApiCheckPage {
+    check_runs: Vec<ApiCheck>,
+}
+
+#[derive(Deserialize)]
+struct ApiCheck {
+    id: u64,
+    name: String,
+    status: String,
+    conclusion: Option<String>,
+    started_at: Option<String>,
+    completed_at: Option<String>,
+}
+
 fn closing_issues(body: Option<&str>) -> Vec<u64> {
     body.into_iter()
         .flat_map(str::lines)
@@ -162,6 +177,40 @@ fn closing_issues(body: Option<&str>) -> Vec<u64> {
 }
 
 impl<R: CommandRunner> GhCommentPort<R> {
+    /// # Errors
+    ///
+    /// Returns a command or response-decoding error.
+    pub fn check_evidence(
+        &mut self,
+        head_sha: &str,
+    ) -> Result<Vec<CheckEvidence>, GhError<R::Error>> {
+        let endpoint = format!("repos/{}/commits/{head_sha}/check-runs", self.repository);
+        let arguments = vec![
+            "api".to_owned(),
+            "--paginate".to_owned(),
+            "--slurp".to_owned(),
+            endpoint,
+        ];
+        let output = self
+            .runner
+            .run(&arguments, None)
+            .map_err(GhError::Command)?;
+        let pages: Vec<ApiCheckPage> =
+            serde_json::from_str(&output).map_err(|_| GhError::Decode)?;
+        Ok(pages
+            .into_iter()
+            .flat_map(|page| page.check_runs)
+            .map(|value| CheckEvidence {
+                id: value.id,
+                name: value.name,
+                status: value.status,
+                conclusion: value.conclusion,
+                started_at: value.started_at,
+                completed_at: value.completed_at,
+            })
+            .collect())
+    }
+
     /// # Errors
     ///
     /// Returns a command or response-decoding error.
