@@ -76,3 +76,48 @@ fn review_metrics(review: &ReviewRecord) -> Result<ReviewMetrics, MetricsError> 
     })
 }
 
+/// # Errors
+///
+/// Returns an error for invalid timestamps, durations, or arithmetic overflow.
+pub fn compute_trace_metrics(trace: &ReconciledTrace) -> Result<TraceMetrics, MetricsError> {
+    let lead_time_ms = trace
+        .evidence
+        .pull_request
+        .merged_at
+        .as_deref()
+        .map(|merged| elapsed_ms(&trace.evidence.pull_request.created_at, merged))
+        .transpose()?;
+    let active_time_ms = total_duration(&trace.telemetry.stages)?;
+    let wait_time_ms = lead_time_ms
+        .zip(active_time_ms)
+        .map(|(lead, active)| {
+            lead.checked_sub(active)
+                .ok_or(MetricsError::InvalidDuration)
+        })
+        .transpose()?;
+    let rework: Vec<_> = trace
+        .telemetry
+        .stages
+        .iter()
+        .filter(|stage| stage.name == "rework")
+        .cloned()
+        .collect();
+    let rework_ms = total_duration(&rework)?;
+    let rework_share_bps = rework_ms.zip(active_time_ms).and_then(|(rework, active)| {
+        (active > 0)
+            .then(|| u32::try_from(rework.saturating_mul(10_000) / active).ok())
+            .flatten()
+    });
+    Ok(TraceMetrics {
+        pull_request: trace.evidence.pull_request.number,
+        outcome: trace.evidence.pull_request.state.clone(),
+        verification: trace.telemetry.verification.outcome.clone(),
+        lead_time_ms,
+        active_time_ms,
+        wait_time_ms,
+        retries: trace.telemetry.attempts.len().saturating_sub(1) as u32,
+        rework_ms,
+        rework_share_bps,
+        review: review_metrics(&trace.telemetry.review)?,
+    })
+}
