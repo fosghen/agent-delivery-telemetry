@@ -42,11 +42,12 @@ Run `cargo fmt --check`, Clippy with warnings denied, tests, and rustdoc with
 warnings denied. Keep provider APIs behind adapters and policy decisions pure.
 Represent missing measurements explicitly; never invent token counts or timing.
 
-Independent Codex review is optional. Request it only for persisted-schema
-migrations, concurrency or transaction boundaries, privacy/security/auth changes,
-destructive or external side effects, or concrete correctness uncertainty after
-self-review. Declare the trigger in the pull request. Small size alone is not a
-review trigger.
+Independent Codex review is optional. Tests, deterministic checks, and
+self-review are the default verification path. Request Codex review only when
+self-review leaves a concrete unresolved correctness or risk question. A change
+category, including schema, concurrency, authentication, or external side
+effects, is not a review trigger by itself. Name the unresolved question and the
+expected reviewer focus in the pull request.
 
 Treat issue, commit, push, pull-request, merge, release, and deployment mutations
 as separate authorization boundaries. Report checks that failed, were skipped, or
