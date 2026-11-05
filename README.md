@@ -55,7 +55,8 @@ comment write access.
 Before coding, record the task start in an explicit local draft:
 
 ```sh
-cargo run -- begin fosghen/project 42 /tmp/issue-42.json
+cargo run -- begin fosghen/project 42 /tmp/issue-42.json \
+  /path/to/codex/session.jsonl
 ```
 
 After checks pass and the PR head exists, finish the draft. The final argument
@@ -67,6 +68,13 @@ cargo run -- finish fosghen/project /tmp/issue-42.json HEAD_SHA 4 /tmp/payload.j
 
 Finishing marks the draft consumed. Drafts older than seven days, reused drafts,
 repository mismatches, and blank revisions fail instead of producing telemetry.
+When an explicit Codex JSONL session is supplied, `begin` records only its latest
+cumulative token counters. `finish` reads the same file and publishes the
+checked delta as unassigned `session_total` usage. Prompts, responses, transcript
+contents, and the local session path never enter the PR comment. Missing,
+unchanged, unreadable, or non-monotonic counters remain unavailable; the finish
+command reports the reason instead of inventing counts. Omit the session argument
+when the local Codex runtime does not expose token-count events.
 
 ```sh
 cargo run -- publish --repo fosghen/project --pr 42 \

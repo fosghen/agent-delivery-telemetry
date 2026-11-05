@@ -2,6 +2,9 @@ use std::process::ExitCode;
 use std::{fs::OpenOptions, io::Write};
 
 use agent_delivery_telemetry::cli::{CliError, parse_collect_args, parse_publish_args, run};
+use agent_delivery_telemetry::codex_usage::{
+    UsageCaptureError, latest_snapshot, unavailable_usage,
+};
 use agent_delivery_telemetry::draft::WorkDraft;
 use agent_delivery_telemetry::github::{GhCommentPort, SystemGh};
 use agent_delivery_telemetry::reconcile::{ReconcileError, ReconciledTrace, reconcile};
@@ -43,11 +46,18 @@ fn now() -> Result<String, (&'static str, u8)> {
 }
 
 fn execute_begin(values: &[&str]) -> Result<(), (&'static str, u8)> {
-    let [repository, issue, output] = values else {
-        return Err(("input", 2));
+    let (repository, issue, output, session_log) = match values {
+        [repository, issue, output] => (*repository, *issue, *output, None),
+        [repository, issue, output, session] => (*repository, *issue, *output, Some(*session)),
+        _ => return Err(("input", 2)),
     };
     let issue = issue.parse().map_err(|_| ("input", 2))?;
-    let draft = WorkDraft::begin(repository, issue, &now()?).map_err(|_| ("input", 2))?;
+    let mut draft = WorkDraft::begin(repository, issue, &now()?).map_err(|_| ("input", 2))?;
+    if let Some(path) = session_log {
+        let contents = std::fs::read_to_string(path).map_err(|_| ("io", 11))?;
+        let baseline = latest_snapshot(&contents).map_err(|_| ("tokens", 12))?;
+        draft.attach_token_source(path, baseline);
+    }
     let json = serde_json::to_string_pretty(&draft).map_err(|_| ("input", 2))?;
     OpenOptions::new()
         .write(true)
@@ -65,7 +75,7 @@ fn execute_finish(values: &[&str]) -> Result<(), (&'static str, u8)> {
     };
     let source = std::fs::read_to_string(draft_path).map_err(|_| ("io", 11))?;
     let mut draft: WorkDraft = serde_json::from_str(&source).map_err(|_| ("input", 2))?;
-    let payload = draft
+    let mut payload = draft
         .finish(
             repository,
             head_sha,
@@ -73,11 +83,30 @@ fn execute_finish(values: &[&str]) -> Result<(), (&'static str, u8)> {
             &now()?,
         )
         .map_err(|_| ("input", 2))?;
+    let token_result = match draft.session_log.as_deref() {
+        Some(path) => match std::fs::read_to_string(path) {
+            Ok(contents) => draft
+                .token_usage(&contents)
+                .map_err(UsageCaptureError::as_str),
+            Err(_) => Err("unreadable"),
+        },
+        None => Err("not_configured"),
+    };
+    let token_status = match token_result {
+        Ok(usage) => {
+            payload.usage.push(usage);
+            "session_total"
+        }
+        Err(reason) => {
+            payload.usage.push(unavailable_usage());
+            reason
+        }
+    };
     let json = serde_json::to_string_pretty(&payload).map_err(|_| ("input", 2))?;
     std::fs::write(output, json).map_err(|_| ("io", 11))?;
     let draft_json = serde_json::to_string_pretty(&draft).map_err(|_| ("input", 2))?;
     std::fs::write(draft_path, draft_json).map_err(|_| ("io", 11))?;
-    println!(r#"{{"action":"finished"}}"#);
+    println!(r#"{{"action":"finished","tokens":"{token_status}"}}"#);
     Ok(())
 }
 

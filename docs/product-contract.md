@@ -17,6 +17,10 @@ The GitHub-backed MVP accepts three classes of input:
 3. User annotations in that record for decisions GitHub cannot observe, such as
    why an independent review was requested.
 
+The local draft may also observe cumulative token-count metadata from an
+explicitly selected Codex session. Only the checked counter delta is published,
+with `session_total` provenance and no stage attribution.
+
 The publisher creates the marked comment once and updates that same comment
 idempotently. Native GitHub evidence remains authoritative for provider-visible
 events and must not be overwritten by comment values.
