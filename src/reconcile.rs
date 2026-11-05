@@ -2,7 +2,7 @@ use crate::comment::{COMMENT_MARKER, CommentError, TelemetryPayload, parse_comme
 use crate::evidence::EvidenceSnapshot;
 use crate::publish::CommentSnapshot;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct ReconciledTrace {
     pub evidence: EvidenceSnapshot,
     pub comment_id: u64,
@@ -44,3 +44,4 @@ pub fn reconcile(
         telemetry,
     })
 }
+use serde::Serialize;
