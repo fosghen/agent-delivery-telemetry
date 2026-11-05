@@ -59,3 +59,14 @@ cargo run -- publish --repo fosghen/project --pr 42 \
 
 Remove `--dry-run` to write the `adt:v1` comment. The command emits one JSON
 object. Exit codes are `0` success, `2` input, `3` conflict, and `4` transport.
+
+After publishing telemetry for the current PR head, reconstruct its trace with:
+
+```sh
+cargo run -- collect --repo fosghen/project --pr 42 --owner fosghen
+```
+
+Collection is read-only. Its JSON combines authoritative PR, commit, check, and
+review evidence with the owned `adt:v1` payload. Additional exit codes are `5`
+missing telemetry, `6` duplicate telemetry, `7` invalid telemetry, and `8` stale
+telemetry. Partial provider visibility is reported inside successful output.
