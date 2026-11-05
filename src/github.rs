@@ -14,8 +14,18 @@ pub trait CommandRunner {
 pub enum GhCommandError {
     Start,
     Input,
+    RateLimited,
     Failed(Option<i32>),
     Output,
+}
+
+fn command_failure(code: Option<i32>, stderr: &[u8]) -> GhCommandError {
+    let message = String::from_utf8_lossy(stderr).to_ascii_lowercase();
+    if message.contains("rate limit") || message.contains("http 429") {
+        GhCommandError::RateLimited
+    } else {
+        GhCommandError::Failed(code)
+    }
 }
 
 #[derive(Default)]
@@ -33,7 +43,7 @@ impl CommandRunner for SystemGh {
                 Stdio::null()
             })
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
+            .stderr(Stdio::piped())
             .spawn()
             .map_err(|_| GhCommandError::Start)?;
         if let Some(value) = input {
@@ -48,9 +58,26 @@ impl CommandRunner for SystemGh {
             .wait_with_output()
             .map_err(|_| GhCommandError::Output)?;
         if !output.status.success() {
-            return Err(GhCommandError::Failed(output.status.code()));
+            return Err(command_failure(output.status.code(), &output.stderr));
         }
         String::from_utf8(output.stdout).map_err(|_| GhCommandError::Output)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{GhCommandError, command_failure};
+
+    #[test]
+    fn command_failure_classifies_rate_limits_without_exposing_stderr() {
+        assert_eq!(
+            command_failure(Some(1), b"HTTP 429: API rate limit exceeded"),
+            GhCommandError::RateLimited
+        );
+        assert_eq!(
+            command_failure(Some(7), b"failed"),
+            GhCommandError::Failed(Some(7))
+        );
     }
 }
 
@@ -93,7 +120,7 @@ impl<R> GhCommentPort<R> {
 }
 use serde::Deserialize;
 
-use crate::evidence::{CommitEvidence, PullRequestEvidence};
+use crate::evidence::{CheckEvidence, CommitEvidence, PullRequestEvidence, ReviewEvidence};
 use crate::publish::{CommentPort, CommentSnapshot};
 
 #[derive(Deserialize)]
@@ -146,6 +173,29 @@ struct ApiCommit {
     commit: ApiCommitMetadata,
 }
 
+#[derive(Deserialize)]
+struct ApiCheckPage {
+    check_runs: Vec<ApiCheck>,
+}
+
+#[derive(Deserialize)]
+struct ApiCheck {
+    id: u64,
+    name: String,
+    status: String,
+    conclusion: Option<String>,
+    started_at: Option<String>,
+    completed_at: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct ApiReview {
+    id: u64,
+    user: ApiUser,
+    state: String,
+    submitted_at: Option<String>,
+}
+
 fn closing_issues(body: Option<&str>) -> Vec<u64> {
     body.into_iter()
         .flat_map(str::lines)
@@ -162,6 +212,72 @@ fn closing_issues(body: Option<&str>) -> Vec<u64> {
 }
 
 impl<R: CommandRunner> GhCommentPort<R> {
+    /// # Errors
+    ///
+    /// Returns a command or response-decoding error.
+    pub fn review_evidence(&mut self) -> Result<Vec<ReviewEvidence>, GhError<R::Error>> {
+        let endpoint = format!(
+            "repos/{}/pulls/{}/reviews",
+            self.repository, self.pull_request
+        );
+        let arguments = vec![
+            "api".to_owned(),
+            "--paginate".to_owned(),
+            "--slurp".to_owned(),
+            endpoint,
+        ];
+        let output = self
+            .runner
+            .run(&arguments, None)
+            .map_err(GhError::Command)?;
+        let pages: Vec<Vec<ApiReview>> =
+            serde_json::from_str(&output).map_err(|_| GhError::Decode)?;
+        Ok(pages
+            .into_iter()
+            .flatten()
+            .map(|value| ReviewEvidence {
+                id: value.id,
+                author: value.user.login,
+                state: value.state,
+                submitted_at: value.submitted_at,
+            })
+            .collect())
+    }
+
+    /// # Errors
+    ///
+    /// Returns a command or response-decoding error.
+    pub fn check_evidence(
+        &mut self,
+        head_sha: &str,
+    ) -> Result<Vec<CheckEvidence>, GhError<R::Error>> {
+        let endpoint = format!("repos/{}/commits/{head_sha}/check-runs", self.repository);
+        let arguments = vec![
+            "api".to_owned(),
+            "--paginate".to_owned(),
+            "--slurp".to_owned(),
+            endpoint,
+        ];
+        let output = self
+            .runner
+            .run(&arguments, None)
+            .map_err(GhError::Command)?;
+        let pages: Vec<ApiCheckPage> =
+            serde_json::from_str(&output).map_err(|_| GhError::Decode)?;
+        Ok(pages
+            .into_iter()
+            .flat_map(|page| page.check_runs)
+            .map(|value| CheckEvidence {
+                id: value.id,
+                name: value.name,
+                status: value.status,
+                conclusion: value.conclusion,
+                started_at: value.started_at,
+                completed_at: value.completed_at,
+            })
+            .collect())
+    }
+
     /// # Errors
     ///
     /// Returns a command or response-decoding error.
