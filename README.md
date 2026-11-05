@@ -1,21 +1,20 @@
 # agent-delivery-telemetry
 
-Local-first telemetry for understanding how long agent-driven changes take and
-where model tokens are spent.
+Repository-native telemetry for understanding how long agent-driven changes take
+and where model tokens are spent.
 
 ## Status
 
-The repository currently contains its Rust scaffold and quality foundation. The
-collector, provider adapters, storage, metrics, and reports are planned work; do
-not use this project for production telemetry yet.
+The repository currently contains its quality foundation and versioned domain
+schema. The PR publisher, GitHub reconciler, metrics, and reports are planned;
+do not use this project for production telemetry yet.
 
 ## Intended workflow
 
-One delivery trace starts when work on an issue begins and ends when the change
-is merged or abandoned. Local events describe implementation and verification;
-GitHub or GitLab evidence supplies pull-request, CI, optional-review, and merge
-timestamps. Token records retain whether their precision is exact, session-wide,
-estimated, or unavailable.
+For the MVP, one delivery trace belongs to one GitHub pull request. The agent
+publishes local stages, verification, and token provenance in one versioned
+`adt:v1` comment. Native GitHub evidence supplies commits, CI, optional-review,
+and merge timestamps. Work abandoned before a PR exists is not captured in v0.1.
 
 Remote Codex review is optional. It is measured only when risk or unresolved
 correctness uncertainty causes someone to request it.
@@ -29,10 +28,12 @@ Development is organized by capability rather than calendar date:
 
 1. Quality foundation
 2. Product contract and event schema
-3. Local capture and SQLite persistence
-4. GitHub and GitLab reconciliation
+3. Idempotent PR telemetry comment and token capture
+4. GitHub timeline and comment reconciliation
 5. Delivery, rework, review, and token metrics
 6. End-to-end validation and v0.1
+
+Local SQLite persistence, pre-PR attempts, and GitLab support are post-MVP work.
 
 Every change starts from a GitHub issue and is delivered as one focused pull
 request. See `AGENTS.md` for the enforced contribution and review policy.

@@ -8,20 +8,18 @@ keeps unavailable measurements explicit; it does not grade engineers or agents.
 
 ## Inputs
 
-The tool accepts four classes of input:
+The GitHub-backed MVP accepts three classes of input:
 
-1. Local lifecycle events emitted by a CLI or wrapper: trace and stage starts,
-   finishes, retries, verification results, and abandonment.
-2. Provider evidence from GitHub or GitLab: issue, pull or merge request, CI,
-   optional review, and merge timestamps and identifiers.
-3. Model usage records: provider, model, input, cached input, output, reasoning,
-   and total tokens when the source exposes them.
-4. User annotations for decisions that providers cannot observe, such as why an
-   independent review was requested.
+1. Native GitHub evidence: issue, pull request, commits, CI, optional review, and
+   merge timestamps and identifiers.
+2. One pull-request comment marked `adt:v1`, containing local stages, attempts,
+   verification outcomes, token usage, and measurement provenance.
+3. User annotations in that record for decisions GitHub cannot observe, such as
+   why an independent review was requested.
 
-Every input carries its source, observed time, source time when available,
-idempotency key, and provenance. Provider evidence may complete local traces but
-must not silently overwrite conflicting observations.
+The publisher creates the marked comment once and updates that same comment
+idempotently. Native GitHub evidence remains authoritative for provider-visible
+events and must not be overwritten by comment values.
 
 ## Provenance
 
@@ -37,8 +35,8 @@ for them. Session totals are never distributed among stages by assumption.
 
 ## Outputs
 
-The durable output is a versioned event stream and materialized trace stored
-locally. Derived outputs are:
+The durable MVP record is the versioned PR comment plus the native GitHub
+timeline. The tool reconstructs a trace on demand and derives:
 
 - issue-to-merge lead time and stage durations;
 - active, waiting, retry, and rework time;
@@ -52,8 +50,8 @@ time value alone is not treated as a better result.
 
 ## Privacy boundary
 
-The default collector stores metadata, counts, timestamps, stable identifiers,
-and explicitly supplied annotations. It does not collect prompts, responses,
+The telemetry comment stores metadata, counts, timestamps, stable identifiers,
+and explicitly supplied annotations. It does not contain prompts, responses,
 source code, diffs, credentials, environment variables, transcripts, raw logs,
 or repository contents.
 
@@ -63,7 +61,11 @@ branch, and model identifiers without changing aggregate values.
 
 ## Failure behavior
 
-Malformed records fail validation without partial persistence. Duplicate records
-are idempotent. Rate limits and temporary provider failures remain retryable.
-Missing optional review or token data produces a valid incomplete trace, not a
-fabricated zero. Schema changes require explicit versioning and migration tests.
+Malformed comments fail validation without being interpreted. Multiple marked
+comments are a conflict rather than an implicit choice. Rate limits and temporary
+GitHub failures remain retryable. Missing optional review or token data produces
+a valid incomplete trace, not a fabricated zero.
+
+Work abandoned before a pull request exists is outside the v0.1 boundary. Local
+persistence and GitLab reconciliation are post-MVP capabilities. Schema changes
+require explicit versioning and compatibility tests.
