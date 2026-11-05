@@ -31,6 +31,13 @@ impl TryFrom<&str> for TraceId {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct IdempotencyKey(String);
 
+impl IdempotencyKey {
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
 impl TryFrom<&str> for IdempotencyKey {
     type Error = SchemaError;
 

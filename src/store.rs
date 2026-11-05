@@ -1,6 +1,8 @@
 use std::path::Path;
 
-use rusqlite::{Connection, Result};
+use rusqlite::{Connection, Result, params};
+
+use crate::schema::{IdempotencyKey, Timestamp, TraceId};
 
 const MIGRATION_1: &str = "
     CREATE TABLE schema_migrations (
@@ -18,6 +20,19 @@ const MIGRATION_1: &str = "
 
 pub struct Store {
     connection: Connection,
+}
+
+pub struct NewEvent {
+    pub trace_id: TraceId,
+    pub key: IdempotencyKey,
+    pub observed_at: Timestamp,
+    pub payload: String,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AppendOutcome {
+    Inserted,
+    Duplicate,
 }
 
 impl Store {
@@ -53,5 +68,28 @@ impl Store {
     pub fn migration_version(&self) -> Result<u32> {
         self.connection
             .pragma_query_value(None, "user_version", |row| row.get(0))
+    }
+
+    /// # Errors
+    ///
+    /// Returns an error when SQLite cannot persist the event transaction.
+    pub fn append(&mut self, event: &NewEvent) -> Result<AppendOutcome> {
+        let transaction = self.connection.transaction()?;
+        let inserted = transaction.execute(
+            "INSERT OR IGNORE INTO events
+             (trace_id, idempotency_key, observed_at, payload) VALUES (?1, ?2, ?3, ?4)",
+            params![
+                event.trace_id.as_str(),
+                event.key.as_str(),
+                event.observed_at.0,
+                event.payload,
+            ],
+        )?;
+        transaction.commit()?;
+        Ok(if inserted == 1 {
+            AppendOutcome::Inserted
+        } else {
+            AppendOutcome::Duplicate
+        })
     }
 }
