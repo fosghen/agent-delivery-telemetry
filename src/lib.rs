@@ -1,5 +1,7 @@
 #![doc = "Core types for agent delivery telemetry."]
 
+pub mod schema;
+
 /// Current persisted schema version.
 pub const SCHEMA_VERSION: u16 = 1;
 
