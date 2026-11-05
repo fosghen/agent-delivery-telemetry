@@ -1,5 +1,6 @@
 #![doc = "Core types for agent delivery telemetry."]
 
+pub mod cli;
 pub mod comment;
 pub mod github;
 pub mod publish;
