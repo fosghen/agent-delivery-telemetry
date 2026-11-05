@@ -46,7 +46,7 @@ impl<R> GhCommentPort<R> {
 }
 use serde::Deserialize;
 
-use crate::publish::CommentSnapshot;
+use crate::publish::{CommentPort, CommentSnapshot};
 
 #[derive(Deserialize)]
 struct ApiUser {
@@ -120,5 +120,41 @@ impl<R: CommandRunner> GhCommentPort<R> {
             .map_err(GhError::Command)?;
         let response: ApiIdentifier = serde_json::from_str(&output).map_err(|_| GhError::Decode)?;
         Ok(response.id)
+    }
+
+    /// # Errors
+    ///
+    /// Returns a command error when GitHub rejects the update.
+    pub fn update_comment(&mut self, id: u64, body: &str) -> Result<(), GhError<R::Error>> {
+        let endpoint = format!("repos/{}/issues/comments/{id}", self.repository);
+        let arguments = vec![
+            "api".to_owned(),
+            "--method".to_owned(),
+            "PATCH".to_owned(),
+            endpoint,
+            "--input".to_owned(),
+            "-".to_owned(),
+        ];
+        let input = serde_json::json!({ "body": body }).to_string();
+        self.runner
+            .run(&arguments, Some(&input))
+            .map_err(GhError::Command)?;
+        Ok(())
+    }
+}
+
+impl<R: CommandRunner> CommentPort for GhCommentPort<R> {
+    type Error = GhError<R::Error>;
+
+    fn list(&mut self) -> Result<Vec<CommentSnapshot>, Self::Error> {
+        self.list_comments()
+    }
+
+    fn create(&mut self, body: &str) -> Result<u64, Self::Error> {
+        self.create_comment(body)
+    }
+
+    fn update(&mut self, id: u64, body: &str) -> Result<(), Self::Error> {
+        self.update_comment(id, body)
     }
 }

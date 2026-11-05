@@ -34,3 +34,23 @@ fn create_posts_json_to_issue_comments_endpoint() {
     );
     assert_eq!(runner.input.as_deref(), Some(r#"{"body":"body"}"#));
 }
+
+#[test]
+fn update_patches_the_selected_issue_comment() {
+    let runner = FakeRunner {
+        arguments: Vec::new(),
+        input: None,
+    };
+    let mut port = GhCommentPort::new(runner, "fosghen/project", 42);
+
+    port.update_comment(7, "new").unwrap();
+    let runner = port.into_runner();
+
+    assert!(runner.arguments.contains(&"PATCH".to_owned()));
+    assert!(
+        runner
+            .arguments
+            .contains(&"repos/fosghen/project/issues/comments/7".to_owned())
+    );
+    assert_eq!(runner.input.as_deref(), Some(r#"{"body":"new"}"#));
+}
