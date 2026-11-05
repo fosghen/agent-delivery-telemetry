@@ -1,7 +1,7 @@
 use serde::Serialize;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
-use crate::comment::{ReviewRecord, StageRecord};
+use crate::comment::{ReviewRecord, StageRecord, UsageRecord};
 use crate::reconcile::ReconciledTrace;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -36,7 +36,7 @@ pub enum MetricsError {
     Overflow,
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct TokenTotals {
     pub input: Option<u64>,
     pub cached_input: Option<u64>,
@@ -45,7 +45,7 @@ pub struct TokenTotals {
     pub total: Option<u64>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct TokenBreakdown {
     pub actor: String,
     pub provider: String,
@@ -64,6 +64,47 @@ pub struct TokenMetrics {
     pub unavailable: Vec<TokenBreakdown>,
     pub cache_share_bps: Option<u32>,
     pub failed_attempt_tokens: Option<u64>,
+}
+
+fn record_totals(record: &UsageRecord) -> TokenTotals {
+    TokenTotals {
+        input: record.input_tokens,
+        cached_input: record.cached_input_tokens,
+        output: record.output_tokens,
+        reasoning: record.reasoning_tokens,
+        total: record.total_tokens,
+    }
+}
+
+fn add_count(target: &mut Option<u64>, value: Option<u64>) -> Result<(), MetricsError> {
+    if let Some(value) = value {
+        *target = Some(
+            target
+                .unwrap_or(0)
+                .checked_add(value)
+                .ok_or(MetricsError::Overflow)?,
+        );
+    }
+    Ok(())
+}
+
+fn add_totals(target: &mut TokenTotals, value: TokenTotals) -> Result<(), MetricsError> {
+    add_count(&mut target.input, value.input)?;
+    add_count(&mut target.cached_input, value.cached_input)?;
+    add_count(&mut target.output, value.output)?;
+    add_count(&mut target.reasoning, value.reasoning)?;
+    add_count(&mut target.total, value.total)
+}
+
+fn token_breakdown(record: &UsageRecord) -> TokenBreakdown {
+    TokenBreakdown {
+        actor: record.actor.clone(),
+        provider: record.provider.clone(),
+        model: record.model.clone(),
+        stage: record.stage.clone(),
+        attempt: record.attempt,
+        totals: record_totals(record),
+    }
 }
 
 fn elapsed_ms(start: &str, finish: &str) -> Result<u64, MetricsError> {
