@@ -73,3 +73,26 @@ pub fn decide_upsert(
         _ => Err(UpsertError::MultipleEligibleComments),
     }
 }
+
+/// # Errors
+///
+/// Returns a selection conflict or provider-specific transport error.
+pub fn publish<P: CommentPort>(
+    port: &mut P,
+    owner: &str,
+    desired: &str,
+) -> Result<PublishOutcome, PublishError<P::Error>> {
+    let comments = port.list().map_err(PublishError::Transport)?;
+    let decision = decide_upsert(&comments, owner, desired).map_err(PublishError::Selection)?;
+    match decision {
+        UpsertDecision::Create { body } => {
+            let id = port.create(&body).map_err(PublishError::Transport)?;
+            Ok(PublishOutcome::Created { id })
+        }
+        UpsertDecision::Update { id, body } => {
+            port.update(id, &body).map_err(PublishError::Transport)?;
+            Ok(PublishOutcome::Updated { id })
+        }
+        UpsertDecision::Unchanged { id } => Ok(PublishOutcome::Unchanged { id }),
+    }
+}
