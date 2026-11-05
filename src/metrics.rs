@@ -36,6 +36,36 @@ pub enum MetricsError {
     Overflow,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize)]
+pub struct TokenTotals {
+    pub input: Option<u64>,
+    pub cached_input: Option<u64>,
+    pub output: Option<u64>,
+    pub reasoning: Option<u64>,
+    pub total: Option<u64>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct TokenBreakdown {
+    pub actor: String,
+    pub provider: String,
+    pub model: Option<String>,
+    pub stage: Option<String>,
+    pub attempt: Option<u32>,
+    pub totals: TokenTotals,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct TokenMetrics {
+    pub exact_totals: TokenTotals,
+    pub exact: Vec<TokenBreakdown>,
+    pub session_totals: Vec<TokenBreakdown>,
+    pub estimates: Vec<TokenBreakdown>,
+    pub unavailable: Vec<TokenBreakdown>,
+    pub cache_share_bps: Option<u32>,
+    pub failed_attempt_tokens: Option<u64>,
+}
+
 fn elapsed_ms(start: &str, finish: &str) -> Result<u64, MetricsError> {
     let start =
         OffsetDateTime::parse(start, &Rfc3339).map_err(|_| MetricsError::InvalidTimestamp)?;
