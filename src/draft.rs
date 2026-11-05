@@ -3,7 +3,8 @@ use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 use crate::codex_usage::{TokenSnapshot, UsageCaptureError, latest_snapshot, session_delta};
 use crate::comment::{
-    AttemptRecord, ReviewRecord, StageRecord, TelemetryPayload, UsageRecord, VerificationRecord,
+    AttemptRecord, ReviewRecord, StageRecord, TelemetryPayload, UsagePrecision, UsageRecord,
+    VerificationRecord,
 };
 
 const MAX_DRAFT_AGE_MS: u64 = 7 * 24 * 60 * 60 * 1_000;
@@ -16,6 +17,14 @@ pub enum DraftError {
     Finished,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TokenRefreshError {
+    Unfinished,
+    Mismatch,
+    AlreadyRefreshed,
+    Usage(UsageCaptureError),
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct WorkDraft {
@@ -24,6 +33,8 @@ pub struct WorkDraft {
     pub issue: u64,
     pub work_started_at: String,
     pub finished_at: Option<String>,
+    #[serde(default)]
+    pub head_sha: Option<String>,
     #[serde(default)]
     pub session_log: Option<String>,
     #[serde(default)]
@@ -46,6 +57,7 @@ impl WorkDraft {
             issue,
             work_started_at: now.to_owned(),
             finished_at: None,
+            head_sha: None,
             session_log: None,
             token_baseline: None,
         })
@@ -64,6 +76,36 @@ impl WorkDraft {
             .as_ref()
             .ok_or(UsageCaptureError::Missing)?;
         session_delta(baseline, &latest_snapshot(session_json_lines)?)
+    }
+
+    /// # Errors
+    /// Returns an error unless a matching finished payload can receive a fresh delta.
+    pub fn refresh_tokens(
+        &self,
+        payload: &mut TelemetryPayload,
+        session_json_lines: &str,
+    ) -> Result<(), TokenRefreshError> {
+        if self.finished_at.is_none() {
+            return Err(TokenRefreshError::Unfinished);
+        }
+        if payload.work_started_at.as_deref() != Some(&self.work_started_at)
+            || self.head_sha.as_deref() != Some(&payload.head_sha)
+        {
+            return Err(TokenRefreshError::Mismatch);
+        }
+        if payload
+            .usage
+            .iter()
+            .any(|usage| usage.precision == UsagePrecision::SessionTotal)
+        {
+            return Err(TokenRefreshError::AlreadyRefreshed);
+        }
+        let usage = self
+            .token_usage(session_json_lines)
+            .map_err(TokenRefreshError::Usage)?;
+        payload.usage.clear();
+        payload.usage.push(usage);
+        Ok(())
     }
 
     /// # Errors
@@ -90,6 +132,7 @@ impl WorkDraft {
             return Err(DraftError::Stale);
         }
         self.finished_at = Some(now.to_owned());
+        self.head_sha = Some(head_sha.to_owned());
         Ok(TelemetryPayload {
             schema_version: crate::SCHEMA_VERSION,
             head_sha: head_sha.to_owned(),

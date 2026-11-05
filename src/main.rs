@@ -5,6 +5,7 @@ use agent_delivery_telemetry::cli::{CliError, parse_collect_args, parse_publish_
 use agent_delivery_telemetry::codex_usage::{
     UsageCaptureError, latest_snapshot, unavailable_usage,
 };
+use agent_delivery_telemetry::comment::TelemetryPayload;
 use agent_delivery_telemetry::draft::WorkDraft;
 use agent_delivery_telemetry::github::{GhCommentPort, SystemGh};
 use agent_delivery_telemetry::reconcile::{ReconcileError, ReconciledTrace, reconcile};
@@ -33,10 +34,31 @@ fn execute() -> Result<(), (&'static str, u8)> {
         Some("publish") => execute_publish(&values),
         Some("begin") => execute_begin(&values),
         Some("finish") => execute_finish(&values),
+        Some("refresh-tokens") => execute_refresh_tokens(&values),
         Some("collect") => execute_collect(&values),
         Some("report") => execute_report(&values),
         _ => Err(("input", 2)),
     }
+}
+
+fn execute_refresh_tokens(values: &[&str]) -> Result<(), (&'static str, u8)> {
+    let [draft_path, payload_path] = values else {
+        return Err(("input", 2));
+    };
+    let draft_json = std::fs::read_to_string(draft_path).map_err(|_| ("io", 11))?;
+    let draft: WorkDraft = serde_json::from_str(&draft_json).map_err(|_| ("input", 2))?;
+    let payload_json = std::fs::read_to_string(payload_path).map_err(|_| ("io", 11))?;
+    let mut payload: TelemetryPayload =
+        serde_json::from_str(&payload_json).map_err(|_| ("input", 2))?;
+    let session_path = draft.session_log.as_deref().ok_or(("tokens", 12))?;
+    let session = std::fs::read_to_string(session_path).map_err(|_| ("io", 11))?;
+    draft
+        .refresh_tokens(&mut payload, &session)
+        .map_err(|_| ("tokens", 12))?;
+    let json = serde_json::to_string_pretty(&payload).map_err(|_| ("input", 2))?;
+    std::fs::write(payload_path, json).map_err(|_| ("io", 11))?;
+    println!(r#"{{"action":"tokens_refreshed"}}"#);
+    Ok(())
 }
 
 fn now() -> Result<String, (&'static str, u8)> {

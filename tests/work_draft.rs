@@ -1,5 +1,5 @@
 use agent_delivery_telemetry::codex_usage::TokenSnapshot;
-use agent_delivery_telemetry::draft::{DraftError, WorkDraft};
+use agent_delivery_telemetry::draft::{DraftError, TokenRefreshError, WorkDraft};
 
 #[test]
 fn begin_records_only_task_identity_and_observed_start() {
@@ -67,4 +67,31 @@ fn draft_keeps_only_token_baseline_and_local_session_reference() {
 
     assert_eq!(draft.session_log.as_deref(), Some("session.jsonl"));
     assert_eq!(usage.total_tokens, Some(75));
+}
+
+#[test]
+fn finished_payload_can_refresh_only_token_usage() {
+    let mut draft = WorkDraft::begin("fosghen/service", 56, "2026-11-05T00:00:00Z").unwrap();
+    draft.attach_token_source("session.jsonl", TokenSnapshot::new(100, 40, 20, 5, 120));
+    let mut payload = draft
+        .finish("fosghen/service", "abc", 9, "2026-11-05T00:10:00Z")
+        .unwrap();
+    let before = payload.clone();
+    let mut mismatched = payload.clone();
+    mismatched.head_sha = "other".to_owned();
+    let session = r#"{"payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":160,"cached_input_tokens":70,"output_tokens":35,"reasoning_output_tokens":9,"total_tokens":195}}}}"#;
+
+    assert_eq!(
+        draft.refresh_tokens(&mut mismatched, session),
+        Err(TokenRefreshError::Mismatch)
+    );
+    draft.refresh_tokens(&mut payload, session).unwrap();
+
+    assert_eq!(payload.usage[0].total_tokens, Some(75));
+    assert_eq!(payload.work_started_at, before.work_started_at);
+    assert_eq!(payload.stages, before.stages);
+    assert_eq!(
+        draft.refresh_tokens(&mut payload, session),
+        Err(TokenRefreshError::AlreadyRefreshed)
+    );
 }
