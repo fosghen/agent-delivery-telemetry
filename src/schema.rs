@@ -108,3 +108,41 @@ impl Attempt {
         }
     }
 }
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Provider {
+    Local,
+    GitHub,
+    GitLab,
+    OpenAi,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ActorKind {
+    Human,
+    Agent,
+    Automation,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Actor {
+    pub kind: ActorKind,
+    pub provider: Option<Provider>,
+    pub model: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EventKind {
+    StageStarted,
+    StageFinished,
+    Verification,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Event {
+    pub key: IdempotencyKey,
+    pub kind: EventKind,
+    pub actor: Actor,
+    pub observed_at: Timestamp,
+    pub source_at: Option<Timestamp>,
+}
