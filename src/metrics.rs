@@ -39,6 +39,7 @@ pub struct StageMetric {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct TraceAnalysis {
+    pub linked_issues: u32,
     pub delivery: TraceMetrics,
     pub tokens: TokenMetrics,
 }
@@ -341,7 +342,81 @@ pub fn compute_trace_metrics(trace: &ReconciledTrace) -> Result<TraceMetrics, Me
 /// Returns an error when delivery or exact token metrics are invalid.
 pub fn analyze_trace(trace: &ReconciledTrace) -> Result<TraceAnalysis, MetricsError> {
     Ok(TraceAnalysis {
+        linked_issues: u32::try_from(trace.evidence.linked_issues.len())
+            .map_err(|_| MetricsError::Overflow)?,
         delivery: compute_trace_metrics(trace)?,
         tokens: compute_token_metrics(trace)?,
+    })
+}
+
+/// # Errors
+/// Returns an error when aggregate counts overflow.
+pub fn aggregate_metrics(traces: &[TraceAnalysis]) -> Result<PortfolioMetrics, MetricsError> {
+    let trace_count = u32::try_from(traces.len()).map_err(|_| MetricsError::Overflow)?;
+    let merged: Vec<_> = traces
+        .iter()
+        .filter(|trace| trace.delivery.lead_time_ms.is_some())
+        .collect();
+    let merged_issues = merged.iter().try_fold(0_u32, |sum, trace| {
+        sum.checked_add(trace.linked_issues)
+            .ok_or(MetricsError::Overflow)
+    })?;
+    let exact_token_traces = merged
+        .iter()
+        .filter(|trace| trace.tokens.exact_totals.total.is_some())
+        .count()
+        .try_into()
+        .map_err(|_| MetricsError::Overflow)?;
+    let exact_tokens = merged.iter().try_fold(Some(0_u64), |sum, trace| {
+        match (sum, trace.tokens.exact_totals.total) {
+            (Some(sum), Some(value)) => sum
+                .checked_add(value)
+                .map(Some)
+                .ok_or(MetricsError::Overflow),
+            _ => Ok(None),
+        }
+    })?;
+    let tokens_per_merged_issue = exact_tokens
+        .filter(|_| merged_issues > 0)
+        .map(|tokens| tokens / u64::from(merged_issues));
+    let failed_attempt_tokens = traces.iter().try_fold(Some(0_u64), |sum, trace| {
+        let value = trace
+            .tokens
+            .failed_attempt_tokens
+            .or((trace.delivery.retries == 0).then_some(0));
+        match (sum, value) {
+            (Some(sum), Some(value)) => sum
+                .checked_add(value)
+                .map(Some)
+                .ok_or(MetricsError::Overflow),
+            _ => Ok(None),
+        }
+    })?;
+    let requested: Vec<_> = traces
+        .iter()
+        .filter_map(|trace| match trace.delivery.review {
+            ReviewMetrics::Requested {
+                confirmed_findings, ..
+            } => Some(confirmed_findings),
+            ReviewMetrics::NotRequested => None,
+        })
+        .collect();
+    let review_requests = u32::try_from(requested.len()).map_err(|_| MetricsError::Overflow)?;
+    let confirmed_findings = requested.iter().map(|value| u64::from(*value)).sum::<u64>();
+    let findings_per_review_milli = (review_requests > 0)
+        .then_some(confirmed_findings.saturating_mul(1_000) / u64::from(review_requests))
+        .and_then(|value| u32::try_from(value).ok());
+    Ok(PortfolioMetrics {
+        traces: trace_count,
+        merged_issues,
+        exact_token_traces,
+        tokens_per_merged_issue,
+        failed_attempt_tokens,
+        review_requests,
+        review_invocation_bps: (trace_count > 0)
+            .then_some(review_requests.saturating_mul(10_000) / trace_count),
+        confirmed_findings,
+        findings_per_review_milli,
+        stages: aggregate_stages(traces)?,
     })
 }
