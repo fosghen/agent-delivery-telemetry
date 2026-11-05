@@ -35,6 +35,13 @@ pub enum AppendOutcome {
     Duplicate,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StoredEvent {
+    pub key: String,
+    pub observed_at: Timestamp,
+    pub payload: String,
+}
+
 impl Store {
     /// # Errors
     ///
@@ -91,5 +98,23 @@ impl Store {
         } else {
             AppendOutcome::Duplicate
         })
+    }
+
+    /// # Errors
+    ///
+    /// Returns an error when SQLite cannot query or decode stored events.
+    pub fn load_trace(&self, trace_id: &TraceId) -> Result<Vec<StoredEvent>> {
+        let mut statement = self.connection.prepare(
+            "SELECT idempotency_key, observed_at, payload FROM events
+             WHERE trace_id = ?1 ORDER BY observed_at, sequence",
+        )?;
+        let rows = statement.query_map([trace_id.as_str()], |row| {
+            Ok(StoredEvent {
+                key: row.get(0)?,
+                observed_at: Timestamp(row.get(1)?),
+                payload: row.get(2)?,
+            })
+        })?;
+        rows.collect()
     }
 }
