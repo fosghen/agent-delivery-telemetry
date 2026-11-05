@@ -77,8 +77,14 @@ fn finished_payload_can_refresh_only_token_usage() {
         .finish("fosghen/service", "abc", 9, "2026-11-05T00:10:00Z")
         .unwrap();
     let before = payload.clone();
+    let mut mismatched = payload.clone();
+    mismatched.head_sha = "other".to_owned();
     let session = r#"{"payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":160,"cached_input_tokens":70,"output_tokens":35,"reasoning_output_tokens":9,"total_tokens":195}}}}"#;
 
+    assert_eq!(
+        draft.refresh_tokens(&mut mismatched, session),
+        Err(TokenRefreshError::Mismatch)
+    );
     draft.refresh_tokens(&mut payload, session).unwrap();
 
     assert_eq!(payload.usage[0].total_tokens, Some(75));

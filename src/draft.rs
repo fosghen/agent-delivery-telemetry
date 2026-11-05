@@ -34,6 +34,8 @@ pub struct WorkDraft {
     pub work_started_at: String,
     pub finished_at: Option<String>,
     #[serde(default)]
+    pub head_sha: Option<String>,
+    #[serde(default)]
     pub session_log: Option<String>,
     #[serde(default)]
     pub token_baseline: Option<TokenSnapshot>,
@@ -55,6 +57,7 @@ impl WorkDraft {
             issue,
             work_started_at: now.to_owned(),
             finished_at: None,
+            head_sha: None,
             session_log: None,
             token_baseline: None,
         })
@@ -85,7 +88,9 @@ impl WorkDraft {
         if self.finished_at.is_none() {
             return Err(TokenRefreshError::Unfinished);
         }
-        if payload.work_started_at.as_deref() != Some(&self.work_started_at) {
+        if payload.work_started_at.as_deref() != Some(&self.work_started_at)
+            || self.head_sha.as_deref() != Some(&payload.head_sha)
+        {
             return Err(TokenRefreshError::Mismatch);
         }
         if payload
@@ -127,6 +132,7 @@ impl WorkDraft {
             return Err(DraftError::Stale);
         }
         self.finished_at = Some(now.to_owned());
+        self.head_sha = Some(head_sha.to_owned());
         Ok(TelemetryPayload {
             schema_version: crate::SCHEMA_VERSION,
             head_sha: head_sha.to_owned(),
