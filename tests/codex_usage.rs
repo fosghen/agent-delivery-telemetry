@@ -1,7 +1,30 @@
 use agent_delivery_telemetry::codex_usage::{
-    TokenSnapshot, UsageCaptureError, exact_exec_usage, latest_snapshot, session_delta,
+    TokenSnapshot, UsageBindError, UsageCaptureError, bind_exact_usage, exact_exec_usage,
+    latest_snapshot, session_delta,
 };
-use agent_delivery_telemetry::comment::UsagePrecision;
+use agent_delivery_telemetry::comment::{
+    ReviewRecord, TelemetryPayload, UsagePrecision, VerificationRecord,
+};
+
+fn payload() -> TelemetryPayload {
+    TelemetryPayload {
+        schema_version: 1,
+        head_sha: "abc".to_owned(),
+        work_started_at: Some("2026-11-06T00:00:00Z".to_owned()),
+        attempts: Vec::new(),
+        stages: Vec::new(),
+        verification: VerificationRecord {
+            outcome: "passed".to_owned(),
+            checks: 2,
+        },
+        review: ReviewRecord::NotRequested,
+        usage: Vec::new(),
+    }
+}
+
+fn artifact() -> agent_delivery_telemetry::comment::UsageRecord {
+    exact_exec_usage(r#"{"type":"turn.completed","usage":{"input_tokens":3,"cached_input_tokens":1,"output_tokens":2,"reasoning_output_tokens":1}}"#).unwrap()
+}
 
 #[test]
 fn completed_exec_turn_becomes_exact_usage() {
