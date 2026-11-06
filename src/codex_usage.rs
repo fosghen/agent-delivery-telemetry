@@ -28,6 +28,8 @@ impl TokenSnapshot {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum UsageCaptureError {
     Missing,
+    Duplicate,
+    Malformed,
     NonMonotonic,
     Unchanged,
 }
@@ -37,10 +39,68 @@ impl UsageCaptureError {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Missing => "missing",
+            Self::Duplicate => "duplicate",
+            Self::Malformed => "malformed",
             Self::NonMonotonic => "non_monotonic",
             Self::Unchanged => "unchanged",
         }
     }
+}
+
+#[derive(Deserialize)]
+struct ExecUsage {
+    #[serde(rename = "input_tokens")]
+    input: u64,
+    #[serde(rename = "cached_input_tokens")]
+    cached_input: u64,
+    #[serde(rename = "output_tokens")]
+    output: u64,
+    #[serde(rename = "reasoning_output_tokens")]
+    reasoning_output: u64,
+}
+
+/// Parses one completed controlled `codex exec --json` stream.
+///
+/// # Errors
+/// Returns an error when JSONL is malformed or does not contain exactly one
+/// complete `turn.completed` usage event.
+pub fn exact_exec_usage(json_lines: &str) -> Result<UsageRecord, UsageCaptureError> {
+    let mut completed = None;
+    for line in json_lines.lines().filter(|line| !line.trim().is_empty()) {
+        let event: serde_json::Value =
+            serde_json::from_str(line).map_err(|_| UsageCaptureError::Malformed)?;
+        if event.get("type").and_then(serde_json::Value::as_str) != Some("turn.completed") {
+            continue;
+        }
+        if completed.is_some() {
+            return Err(UsageCaptureError::Duplicate);
+        }
+        let value = event
+            .get("usage")
+            .cloned()
+            .ok_or(UsageCaptureError::Missing)?;
+        completed = Some(
+            serde_json::from_value::<ExecUsage>(value).map_err(|_| UsageCaptureError::Missing)?,
+        );
+    }
+    let usage = completed.ok_or(UsageCaptureError::Missing)?;
+    let total = usage
+        .input
+        .checked_add(usage.output)
+        .ok_or(UsageCaptureError::Malformed)?;
+    Ok(UsageRecord {
+        actor: "primary".to_owned(),
+        provider: "openai".to_owned(),
+        model: None,
+        stage: None,
+        attempt: None,
+        precision: UsagePrecision::Exact,
+        input_tokens: Some(usage.input),
+        cached_input_tokens: Some(usage.cached_input),
+        output_tokens: Some(usage.output),
+        reasoning_tokens: Some(usage.reasoning_output),
+        total_tokens: Some(total),
+    })
 }
 
 #[must_use]
