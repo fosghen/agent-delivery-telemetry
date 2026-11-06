@@ -32,6 +32,7 @@ pub enum UsageCaptureError {
     Malformed,
     NonMonotonic,
     Unchanged,
+    BlankProvenance,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -51,6 +52,7 @@ impl UsageCaptureError {
             Self::Malformed => "malformed",
             Self::NonMonotonic => "non_monotonic",
             Self::Unchanged => "unchanged",
+            Self::BlankProvenance => "blank_provenance",
         }
     }
 }
@@ -112,6 +114,24 @@ pub fn exact_exec_usage(json_lines: &str) -> Result<UsageRecord, UsageCaptureErr
     })
 }
 
+/// Parse exact usage and attach caller-observed invocation provenance.
+///
+/// # Errors
+/// Returns an error when provenance is blank or the JSONL capture is invalid.
+pub fn exact_exec_usage_with_provenance(
+    json_lines: &str,
+    model: &str,
+    reasoning_effort: &str,
+) -> Result<UsageRecord, UsageCaptureError> {
+    if model.trim().is_empty() || reasoning_effort.trim().is_empty() {
+        return Err(UsageCaptureError::BlankProvenance);
+    }
+    let mut usage = exact_exec_usage(json_lines)?;
+    usage.model = Some(model.to_owned());
+    usage.reasoning_effort = Some(reasoning_effort.to_owned());
+    Ok(usage)
+}
+
 /// Binds one sanitized controlled-exec artifact to a stable run identity.
 ///
 /// # Errors
@@ -130,10 +150,15 @@ pub fn bind_exact_usage(
     if attempt == 0 {
         return Err(UsageBindError::ZeroAttempt);
     }
+    let provenance = match (&artifact.model, &artifact.reasoning_effort) {
+        (None, None) => true,
+        (Some(model), Some(effort)) => !model.trim().is_empty() && !effort.trim().is_empty(),
+        _ => false,
+    };
     let captured = artifact.precision == UsagePrecision::Exact
         && artifact.actor == "primary"
         && artifact.provider == "openai"
-        && artifact.model.is_none()
+        && provenance
         && artifact.stage.is_none()
         && artifact.attempt.is_none()
         && artifact.input_tokens.is_some()
@@ -160,6 +185,7 @@ pub fn bind_exact_usage(
             && usage.actor == "primary"
             && usage.provider == "openai"
             && usage.model.is_none()
+            && usage.reasoning_effort.is_none()
             && usage.stage.is_none()
             && usage.attempt.is_none()
             && usage.input_tokens.is_none()
