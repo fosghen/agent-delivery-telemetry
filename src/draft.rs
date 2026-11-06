@@ -39,6 +39,8 @@ pub struct WorkDraft {
     pub session_log: Option<String>,
     #[serde(default)]
     pub token_baseline: Option<TokenSnapshot>,
+    #[serde(default)]
+    pub require_tokens: bool,
 }
 
 impl WorkDraft {
@@ -60,6 +62,7 @@ impl WorkDraft {
             head_sha: None,
             session_log: None,
             token_baseline: None,
+            require_tokens: false,
         })
     }
 
