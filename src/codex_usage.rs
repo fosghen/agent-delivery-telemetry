@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::comment::{UsagePrecision, UsageRecord};
+use crate::comment::{TelemetryPayload, UsagePrecision, UsageRecord, validate_usage};
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TokenSnapshot {
@@ -32,6 +32,14 @@ pub enum UsageCaptureError {
     Malformed,
     NonMonotonic,
     Unchanged,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UsageBindError {
+    InvalidArtifact,
+    BlankIdentity,
+    ZeroAttempt,
+    DuplicateIdentity,
 }
 
 impl UsageCaptureError {
@@ -101,6 +109,66 @@ pub fn exact_exec_usage(json_lines: &str) -> Result<UsageRecord, UsageCaptureErr
         reasoning_tokens: Some(usage.reasoning_output),
         total_tokens: Some(total),
     })
+}
+
+/// Binds one sanitized controlled-exec artifact to a stable run identity.
+///
+/// # Errors
+/// Returns an error without changing the payload when the artifact or identity
+/// is invalid, or when that actor, stage, and attempt tuple already exists.
+pub fn bind_exact_usage(
+    payload: &mut TelemetryPayload,
+    mut artifact: UsageRecord,
+    actor: &str,
+    stage: &str,
+    attempt: u32,
+) -> Result<(), UsageBindError> {
+    if actor.trim().is_empty() || stage.trim().is_empty() {
+        return Err(UsageBindError::BlankIdentity);
+    }
+    if attempt == 0 {
+        return Err(UsageBindError::ZeroAttempt);
+    }
+    let captured = artifact.precision == UsagePrecision::Exact
+        && artifact.actor == "primary"
+        && artifact.provider == "openai"
+        && artifact.model.is_none()
+        && artifact.stage.is_none()
+        && artifact.attempt.is_none()
+        && artifact.input_tokens.is_some()
+        && artifact.cached_input_tokens.is_some()
+        && artifact.output_tokens.is_some()
+        && artifact.reasoning_tokens.is_some()
+        && artifact.total_tokens.is_some()
+        && validate_usage(std::slice::from_ref(&artifact)).is_ok();
+    if !captured {
+        return Err(UsageBindError::InvalidArtifact);
+    }
+    if payload.usage.iter().any(|usage| {
+        usage.actor == actor
+            && usage.stage.as_deref() == Some(stage)
+            && usage.attempt == Some(attempt)
+    }) {
+        return Err(UsageBindError::DuplicateIdentity);
+    }
+    actor.clone_into(&mut artifact.actor);
+    artifact.stage = Some(stage.to_owned());
+    artifact.attempt = Some(attempt);
+    payload.usage.retain(|usage| {
+        !(usage.precision == UsagePrecision::Unavailable
+            && usage.actor == "primary"
+            && usage.provider == "openai"
+            && usage.model.is_none()
+            && usage.stage.is_none()
+            && usage.attempt.is_none()
+            && usage.input_tokens.is_none()
+            && usage.cached_input_tokens.is_none()
+            && usage.output_tokens.is_none()
+            && usage.reasoning_tokens.is_none()
+            && usage.total_tokens.is_none())
+    });
+    payload.usage.push(artifact);
+    Ok(())
 }
 
 #[must_use]
