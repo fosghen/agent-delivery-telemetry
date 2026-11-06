@@ -41,6 +41,9 @@ adaptation of Puzzle Driven Development.
 Run `cargo fmt --check`, Clippy with warnings denied, tests, and rustdoc with
 warnings denied. Keep provider APIs behind adapters and policy decisions pure.
 Represent missing measurements explicitly; never invent token counts or timing.
+When the owning repository requires token metrics, run `begin --require-tokens`
+with a validated session source before editing. If strict begin cannot succeed,
+stop and report the missing source; never downgrade that workflow to best-effort.
 
 Independent Codex review is optional. Tests, deterministic checks, and
 self-review are the default verification path. Request Codex review only when
