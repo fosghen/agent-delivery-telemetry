@@ -1,6 +1,6 @@
 use agent_delivery_telemetry::codex_usage::{
     TokenSnapshot, UsageBindError, UsageCaptureError, bind_exact_usage, exact_exec_usage,
-    latest_snapshot, session_delta,
+    latest_snapshot, session_delta, unavailable_usage,
 };
 use agent_delivery_telemetry::comment::{
     ReviewRecord, TelemetryPayload, UsagePrecision, VerificationRecord,
@@ -54,6 +54,71 @@ fn incomplete_or_ambiguous_exec_stream_is_rejected() {
         exact_exec_usage("not json"),
         Err(UsageCaptureError::Malformed)
     );
+}
+
+#[test]
+fn exact_artifact_binds_to_explicit_run_without_changing_other_fields() {
+    let before = payload();
+    let mut after = before.clone();
+    after.usage.push(unavailable_usage());
+
+    bind_exact_usage(&mut after, artifact(), "subagent-1", "implementation", 2).unwrap();
+
+    assert_eq!(after.usage.len(), 1);
+    assert_eq!(after.usage[0].actor, "subagent-1");
+    assert_eq!(after.usage[0].stage.as_deref(), Some("implementation"));
+    assert_eq!(after.usage[0].attempt, Some(2));
+    assert_eq!(after.usage[0].total_tokens, Some(5));
+    after.usage.clear();
+    assert_eq!(after, before);
+}
+
+#[test]
+fn distinct_runs_bind_but_invalid_identity_and_duplicates_do_not_mutate() {
+    let mut payload = payload();
+    bind_exact_usage(&mut payload, artifact(), "primary", "implementation", 1).unwrap();
+    bind_exact_usage(&mut payload, artifact(), "subagent", "implementation", 1).unwrap();
+    bind_exact_usage(&mut payload, artifact(), "primary", "verification", 1).unwrap();
+    let before = payload.clone();
+
+    assert_eq!(
+        bind_exact_usage(&mut payload, artifact(), "primary", "implementation", 1),
+        Err(UsageBindError::DuplicateIdentity)
+    );
+    assert_eq!(
+        bind_exact_usage(&mut payload, artifact(), " ", "implementation", 2),
+        Err(UsageBindError::BlankIdentity)
+    );
+    assert_eq!(
+        bind_exact_usage(&mut payload, artifact(), "primary", "verification", 0),
+        Err(UsageBindError::ZeroAttempt)
+    );
+    assert_eq!(payload, before);
+}
+
+#[test]
+fn unavailable_or_non_capture_artifacts_are_rejected_without_mutation() {
+    let mut payload = payload();
+    let before = payload.clone();
+    let mut unavailable = artifact();
+    unavailable.precision = UsagePrecision::Unavailable;
+    unavailable.input_tokens = None;
+    unavailable.cached_input_tokens = None;
+    unavailable.output_tokens = None;
+    unavailable.reasoning_tokens = None;
+    unavailable.total_tokens = None;
+
+    assert_eq!(
+        bind_exact_usage(&mut payload, unavailable, "primary", "implementation", 1),
+        Err(UsageBindError::InvalidArtifact)
+    );
+    let mut attributed = artifact();
+    attributed.stage = Some("tampered".to_owned());
+    assert_eq!(
+        bind_exact_usage(&mut payload, attributed, "primary", "implementation", 1),
+        Err(UsageBindError::InvalidArtifact)
+    );
+    assert_eq!(payload, before);
 }
 
 #[test]
