@@ -59,15 +59,24 @@ prompt, response, or source contents:
 
 ```sh
 set -o pipefail
-codex exec --json --full-auto 'Implement issue #42' \
+codex exec --json --sandbox workspace-write \
+  -c 'approval_policy="never"' 'Implement issue #42' </dev/null \
   | agent-delivery-telemetry capture-codex-usage /tmp/issue-42-usage.json
 ```
 
 The command requires exactly one complete `turn.completed` event and fails on
-missing, duplicate, malformed, or incomplete usage. Binding captured run files
-to the final PR payload is a separate planned slice. Interactive Codex session
-logs remain a best-effort fallback because their cumulative counters may lag or
-be absent.
+missing, duplicate, malformed, or incomplete usage. After finishing a payload,
+bind each capture to an explicit stable run identity:
+
+```sh
+cargo run -- bind-codex-usage /tmp/payload.json \
+  /tmp/issue-42-usage.json subagent-1 implementation 1
+```
+
+Actor and stage must be nonblank and attempt must be positive. Distinct tuples
+support multiple primary or subagent runs; duplicate tuples and invalid capture
+artifacts leave the payload unchanged. Interactive Codex session logs remain a
+best-effort fallback because their cumulative counters may lag or be absent.
 
 Before coding, record the task start in an explicit local draft:
 

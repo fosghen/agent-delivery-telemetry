@@ -6,9 +6,9 @@ use std::{
 
 use agent_delivery_telemetry::cli::{CliError, parse_collect_args, parse_publish_args, run};
 use agent_delivery_telemetry::codex_usage::{
-    UsageCaptureError, exact_exec_usage, latest_snapshot, unavailable_usage,
+    UsageCaptureError, bind_exact_usage, exact_exec_usage, latest_snapshot, unavailable_usage,
 };
-use agent_delivery_telemetry::comment::TelemetryPayload;
+use agent_delivery_telemetry::comment::{TelemetryPayload, UsageRecord};
 use agent_delivery_telemetry::draft::WorkDraft;
 use agent_delivery_telemetry::github::{GhCommentPort, SystemGh};
 use agent_delivery_telemetry::reconcile::{ReconcileError, ReconciledTrace, reconcile};
@@ -39,10 +39,28 @@ fn execute() -> Result<(), (&'static str, u8)> {
         Some("finish") => execute_finish(&values),
         Some("refresh-tokens") => execute_refresh_tokens(&values),
         Some("capture-codex-usage") => execute_capture_codex_usage(&values),
+        Some("bind-codex-usage") => execute_bind_codex_usage(&values),
         Some("collect") => execute_collect(&values),
         Some("report") => execute_report(&values),
         _ => Err(("input", 2)),
     }
+}
+
+fn execute_bind_codex_usage(values: &[&str]) -> Result<(), (&'static str, u8)> {
+    let [payload_path, artifact_path, actor, stage, attempt] = values else {
+        return Err(("input", 2));
+    };
+    let attempt = attempt.parse().map_err(|_| ("input", 2))?;
+    let payload_json = std::fs::read_to_string(payload_path).map_err(|_| ("io", 11))?;
+    let mut payload: TelemetryPayload =
+        serde_json::from_str(&payload_json).map_err(|_| ("input", 2))?;
+    let artifact_json = std::fs::read_to_string(artifact_path).map_err(|_| ("io", 11))?;
+    let artifact: UsageRecord = serde_json::from_str(&artifact_json).map_err(|_| ("tokens", 12))?;
+    bind_exact_usage(&mut payload, artifact, actor, stage, attempt).map_err(|_| ("tokens", 12))?;
+    let json = serde_json::to_string_pretty(&payload).map_err(|_| ("input", 2))?;
+    std::fs::write(payload_path, json).map_err(|_| ("io", 11))?;
+    println!(r#"{{"action":"codex_usage_bound"}}"#);
+    Ok(())
 }
 
 fn execute_capture_codex_usage(values: &[&str]) -> Result<(), (&'static str, u8)> {
