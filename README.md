@@ -88,6 +88,19 @@ cargo run -- begin fosghen/project 42 /tmp/issue-42.json \
   /path/to/codex/session.jsonl
 ```
 
+When token metrics are mandatory, use strict mode. It requires a readable session
+with a valid token baseline before it creates the draft:
+
+```sh
+cargo run -- begin --require-tokens fosghen/project 42 \
+  /tmp/issue-42.json /path/to/codex/session.jsonl
+```
+
+Missing or invalid token input exits with code `12` and writes no draft. Strict
+drafts also make `finish` exit `12` without consuming the draft when counters are
+missing, unchanged, unreadable, or non-monotonic. Do not start implementation
+until strict `begin` succeeds when repository policy requires token metrics.
+
 After checks pass and the PR head exists, finish the draft. The final argument
 is the number of verification checks and the output is a publishable payload:
 
@@ -101,9 +114,10 @@ When an explicit Codex JSONL session is supplied, `begin` records only its lates
 cumulative token counters. `finish` reads the same file and publishes the
 checked delta as unassigned `session_total` usage. Prompts, responses, transcript
 contents, and the local session path never enter the PR comment. Missing,
-unchanged, unreadable, or non-monotonic counters remain unavailable; the finish
-command reports the reason instead of inventing counts. Omit the session argument
-when the local Codex runtime does not expose token-count events.
+unchanged, unreadable, or non-monotonic counters remain unavailable in default
+best-effort mode; `finish` reports the reason instead of inventing counts. Omit
+the session argument only when repository policy permits unavailable tokens.
+Strict workflows must stop instead.
 
 Codex may append the final cumulative counters only after the measured agent
 turn completes. In the next turn, refresh the already-finished payload and

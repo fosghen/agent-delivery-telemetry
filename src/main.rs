@@ -116,9 +116,15 @@ fn now() -> Result<String, (&'static str, u8)> {
 }
 
 fn execute_begin(values: &[&str]) -> Result<(), (&'static str, u8)> {
-    let (repository, issue, output, session_log) = match values {
-        [repository, issue, output] => (*repository, *issue, *output, None),
-        [repository, issue, output, session] => (*repository, *issue, *output, Some(*session)),
+    let (repository, issue, output, session_log, require_tokens) = match values {
+        ["--require-tokens", repository, issue, output, session] => {
+            (*repository, *issue, *output, Some(*session), true)
+        }
+        ["--require-tokens", ..] => return Err(("tokens", 12)),
+        [repository, issue, output] => (*repository, *issue, *output, None, false),
+        [repository, issue, output, session] => {
+            (*repository, *issue, *output, Some(*session), false)
+        }
         _ => return Err(("input", 2)),
     };
     let issue = issue.parse().map_err(|_| ("input", 2))?;
@@ -128,6 +134,7 @@ fn execute_begin(values: &[&str]) -> Result<(), (&'static str, u8)> {
         let baseline = latest_snapshot(&contents).map_err(|_| ("tokens", 12))?;
         draft.attach_token_source(path, baseline);
     }
+    draft.require_tokens = require_tokens;
     let json = serde_json::to_string_pretty(&draft).map_err(|_| ("input", 2))?;
     OpenOptions::new()
         .write(true)
@@ -168,6 +175,9 @@ fn execute_finish(values: &[&str]) -> Result<(), (&'static str, u8)> {
             "session_total"
         }
         Err(reason) => {
+            if draft.require_tokens {
+                return Err(("tokens", 12));
+            }
             payload.usage.push(unavailable_usage());
             reason
         }
