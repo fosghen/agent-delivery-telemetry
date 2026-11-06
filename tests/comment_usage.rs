@@ -6,6 +6,7 @@ fn token_usage_preserves_actor_model_and_precision() {
         actor: "primary_agent".to_owned(),
         provider: "openai".to_owned(),
         model: Some("codex".to_owned()),
+        reasoning_effort: Some("medium".to_owned()),
         stage: None,
         attempt: None,
         precision: UsagePrecision::SessionTotal,
@@ -20,4 +21,5 @@ fn token_usage_preserves_actor_model_and_precision() {
 
     assert_eq!(value["precision"], "session_total");
     assert_eq!(value["actor"], "primary_agent");
+    assert_eq!(value["reasoning_effort"], "medium");
 }
