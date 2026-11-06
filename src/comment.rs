@@ -80,6 +80,8 @@ pub struct UsageRecord {
     pub actor: String,
     pub provider: String,
     pub model: Option<String>,
+    #[serde(default)]
+    pub reasoning_effort: Option<String>,
     pub stage: Option<String>,
     pub attempt: Option<u32>,
     pub precision: UsagePrecision,

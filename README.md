@@ -61,11 +61,14 @@ prompt, response, or source contents:
 set -o pipefail
 codex exec --json --sandbox workspace-write \
   -c 'approval_policy="never"' 'Implement issue #42' </dev/null \
-  | agent-delivery-telemetry capture-codex-usage /tmp/issue-42-usage.json
+  | agent-delivery-telemetry capture-codex-usage \
+      /tmp/issue-42-usage.json gpt-6.1-sol medium
 ```
 
-The command requires exactly one complete `turn.completed` event and fails on
-missing, duplicate, malformed, or incomplete usage. After finishing a payload,
+Explicit nonblank model and reasoning-effort provenance is recorded when supplied;
+the legacy output-only form remains unattributed. Both forms require exactly one
+complete `turn.completed` event. They fail on missing, duplicate, malformed, or
+incomplete usage. After finishing a payload,
 bind each capture to an explicit stable run identity:
 
 ```sh

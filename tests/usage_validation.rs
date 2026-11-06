@@ -5,6 +5,7 @@ fn usage(precision: UsagePrecision) -> UsageRecord {
         actor: "primary".to_owned(),
         provider: "openai".to_owned(),
         model: Some("gpt".to_owned()),
+        reasoning_effort: Some("medium".to_owned()),
         stage: None,
         attempt: Some(1),
         precision,

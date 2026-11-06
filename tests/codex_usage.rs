@@ -1,6 +1,6 @@
 use agent_delivery_telemetry::codex_usage::{
     TokenSnapshot, UsageBindError, UsageCaptureError, bind_exact_usage, exact_exec_usage,
-    latest_snapshot, session_delta, unavailable_usage,
+    exact_exec_usage_with_provenance, latest_snapshot, session_delta, unavailable_usage,
 };
 use agent_delivery_telemetry::comment::{
     ReviewRecord, TelemetryPayload, UsagePrecision, VerificationRecord,
@@ -39,6 +39,20 @@ fn completed_exec_turn_becomes_exact_usage() {
     assert_eq!(usage.output_tokens, Some(5));
     assert_eq!(usage.reasoning_tokens, Some(2));
     assert_eq!(usage.total_tokens, Some(13_897));
+}
+
+#[test]
+fn controlled_capture_preserves_explicit_model_provenance() {
+    let trace = r#"{"type":"turn.completed","usage":{"input_tokens":3,"cached_input_tokens":1,"output_tokens":2,"reasoning_output_tokens":1}}"#;
+
+    let usage = exact_exec_usage_with_provenance(trace, "gpt-6-luna", "medium").unwrap();
+
+    assert_eq!(usage.model.as_deref(), Some("gpt-6-luna"));
+    assert_eq!(usage.reasoning_effort.as_deref(), Some("medium"));
+    assert_eq!(
+        exact_exec_usage_with_provenance(trace, " ", "medium"),
+        Err(UsageCaptureError::BlankProvenance)
+    );
 }
 
 #[test]
