@@ -16,7 +16,10 @@ impl CommandRunner for FakeRunner {
 
 #[test]
 fn revision_must_resolve_to_the_exact_target_repository_sha() {
-    for (response, expected) in [(Ok("target\n".to_owned()), true), (Ok("foreign\n".into()), false)] {
+    for (response, expected) in [
+        (Ok("target\n".to_owned()), true),
+        (Ok("foreign\n".into()), false),
+    ] {
         let mut runner = FakeRunner {
             response,
             arguments: Vec::new(),
