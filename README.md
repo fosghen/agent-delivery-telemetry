@@ -81,6 +81,17 @@ support multiple primary or subagent runs; duplicate tuples and invalid capture
 artifacts leave the payload unchanged. Interactive Codex session logs remain a
 best-effort fallback because their cumulative counters may lag or be absent.
 
+When a review was explicitly requested and completed, record its evidence before
+publishing. This decision is never inferred from bound reviewer usage:
+
+```sh
+cargo run -- record-review /tmp/payload.json correctness_uncertainty \
+  2026-11-06T00:01:00Z 2026-11-06T00:02:00Z no_findings 0 0
+```
+
+The last two values are confirmed findings and rework milliseconds. Blank,
+malformed, reversed, or duplicate review evidence leaves the payload unchanged.
+
 Before coding, record the task start in an explicit local draft:
 
 ```sh
