@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 pub const COMMENT_MARKER: &str = "<!-- adt:v1 -->";
 const JSON_FENCE: &str = "```json\n";
@@ -63,6 +64,51 @@ pub enum ReviewRecord {
         confirmed_findings: u32,
         rework_ms: Option<u64>,
     },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ReviewError {
+    AlreadyRecorded,
+    BlankField,
+    InvalidTimestamp,
+    InvalidOrder,
+}
+
+/// Records explicit evidence for one completed review.
+///
+/// # Errors
+/// Returns an error for duplicate, blank, malformed, or reversed evidence.
+pub fn record_completed_review(
+    payload: &mut TelemetryPayload,
+    trigger: &str,
+    requested_at: &str,
+    completed_at: &str,
+    outcome: &str,
+    confirmed_findings: u32,
+    rework_ms: u64,
+) -> Result<(), ReviewError> {
+    if payload.review != ReviewRecord::NotRequested {
+        return Err(ReviewError::AlreadyRecorded);
+    }
+    if trigger.trim().is_empty() || outcome.trim().is_empty() {
+        return Err(ReviewError::BlankField);
+    }
+    let requested = OffsetDateTime::parse(requested_at, &Rfc3339)
+        .map_err(|_| ReviewError::InvalidTimestamp)?;
+    let completed = OffsetDateTime::parse(completed_at, &Rfc3339)
+        .map_err(|_| ReviewError::InvalidTimestamp)?;
+    if completed < requested {
+        return Err(ReviewError::InvalidOrder);
+    }
+    payload.review = ReviewRecord::Requested {
+        trigger: trigger.to_owned(),
+        requested_at: requested_at.to_owned(),
+        completed_at: Some(completed_at.to_owned()),
+        outcome: Some(outcome.to_owned()),
+        confirmed_findings,
+        rework_ms: Some(rework_ms),
+    };
+    Ok(())
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
