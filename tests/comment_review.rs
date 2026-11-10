@@ -62,7 +62,10 @@ fn completed_review_rejects_invalid_or_duplicate_evidence() {
         record_completed_review(payload, "risk", requested, completed, "clean", 0, 0)
     };
 
-    assert_eq!(record(&mut payload, "bad", "also-bad"), Err(ReviewError::InvalidTimestamp));
+    assert_eq!(
+        record(&mut payload, "bad", "also-bad"),
+        Err(ReviewError::InvalidTimestamp)
+    );
     assert_eq!(
         record(&mut payload, "2026-11-05T00:08:00Z", "2026-11-05T00:05:00Z"),
         Err(ReviewError::InvalidOrder)

@@ -93,10 +93,10 @@ pub fn record_completed_review(
     if trigger.trim().is_empty() || outcome.trim().is_empty() {
         return Err(ReviewError::BlankField);
     }
-    let requested = OffsetDateTime::parse(requested_at, &Rfc3339)
-        .map_err(|_| ReviewError::InvalidTimestamp)?;
-    let completed = OffsetDateTime::parse(completed_at, &Rfc3339)
-        .map_err(|_| ReviewError::InvalidTimestamp)?;
+    let requested =
+        OffsetDateTime::parse(requested_at, &Rfc3339).map_err(|_| ReviewError::InvalidTimestamp)?;
+    let completed =
+        OffsetDateTime::parse(completed_at, &Rfc3339).map_err(|_| ReviewError::InvalidTimestamp)?;
     if completed < requested {
         return Err(ReviewError::InvalidOrder);
     }

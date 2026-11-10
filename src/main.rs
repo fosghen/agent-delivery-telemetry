@@ -49,12 +49,20 @@ fn execute() -> Result<(), (&'static str, u8)> {
 }
 
 fn execute_record_review(values: &[&str]) -> Result<(), (&'static str, u8)> {
-    let [path, trigger, requested, completed, outcome, findings, rework] = values else {
+    let [
+        path,
+        trigger,
+        requested,
+        completed,
+        outcome,
+        findings,
+        rework,
+    ] = values
+    else {
         return Err(("input", 2));
     };
     let source = std::fs::read_to_string(path).map_err(|_| ("io", 11))?;
-    let mut payload: TelemetryPayload =
-        serde_json::from_str(&source).map_err(|_| ("input", 2))?;
+    let mut payload: TelemetryPayload = serde_json::from_str(&source).map_err(|_| ("input", 2))?;
     record_completed_review(
         &mut payload,
         trigger,
