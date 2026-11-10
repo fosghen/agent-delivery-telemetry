@@ -109,7 +109,9 @@ cargo run -- finish fosghen/project /tmp/issue-42.json HEAD_SHA 4 /tmp/payload.j
 ```
 
 Finishing marks the draft consumed. Drafts older than seven days, reused drafts,
-repository mismatches, and blank revisions fail instead of producing telemetry.
+repository mismatches, and revisions not resolved from the named GitHub repository
+fail before consuming the draft or producing telemetry. Supply the exact pushed PR
+head SHA; `finish` verifies it through authenticated `gh api` access.
 When an explicit Codex JSONL session is supplied, `begin` records only its latest
 cumulative token counters. `finish` reads the same file and publishes the
 checked delta as unassigned `session_total` usage. Prompts, responses, transcript

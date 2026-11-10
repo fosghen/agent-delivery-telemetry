@@ -11,7 +11,9 @@ use agent_delivery_telemetry::codex_usage::{
 };
 use agent_delivery_telemetry::comment::{TelemetryPayload, UsageRecord};
 use agent_delivery_telemetry::draft::WorkDraft;
-use agent_delivery_telemetry::github::{GhCommentPort, SystemGh};
+use agent_delivery_telemetry::github::{
+    GhCommentPort, SystemGh, revision_belongs_to_repository,
+};
 use agent_delivery_telemetry::reconcile::{ReconcileError, ReconciledTrace, reconcile};
 use agent_delivery_telemetry::report::build_report;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
@@ -152,6 +154,11 @@ fn execute_finish(values: &[&str]) -> Result<(), (&'static str, u8)> {
     };
     let source = std::fs::read_to_string(draft_path).map_err(|_| ("io", 11))?;
     let mut draft: WorkDraft = serde_json::from_str(&source).map_err(|_| ("input", 2))?;
+    if !revision_belongs_to_repository(&mut SystemGh, repository, head_sha)
+        .map_err(|_| ("revision", 13))?
+    {
+        return Err(("revision", 13));
+    }
     let mut payload = draft
         .finish(
             repository,

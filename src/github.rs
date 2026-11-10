@@ -10,6 +10,26 @@ pub trait CommandRunner {
     fn run(&mut self, arguments: &[String], input: Option<&str>) -> Result<String, Self::Error>;
 }
 
+/// Confirm that an exact revision is addressable from the target repository.
+///
+/// # Errors
+/// Returns the command runner's bounded transport error.
+pub fn revision_belongs_to_repository<R: CommandRunner>(
+    runner: &mut R,
+    repository: &str,
+    head_sha: &str,
+) -> Result<bool, R::Error> {
+    let arguments = vec![
+        "api".to_owned(),
+        format!("repos/{repository}/commits/{head_sha}"),
+        "--jq".to_owned(),
+        ".sha".to_owned(),
+    ];
+    runner
+        .run(&arguments, None)
+        .map(|observed| observed.trim() == head_sha)
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum GhCommandError {
     Start,
