@@ -9,7 +9,7 @@ use agent_delivery_telemetry::codex_usage::{
     UsageCaptureError, bind_exact_usage, exact_exec_usage, exact_exec_usage_with_provenance,
     latest_snapshot, unavailable_usage,
 };
-use agent_delivery_telemetry::comment::{TelemetryPayload, UsageRecord};
+use agent_delivery_telemetry::comment::{TelemetryPayload, UsageRecord, record_completed_review};
 use agent_delivery_telemetry::draft::WorkDraft;
 use agent_delivery_telemetry::github::{GhCommentPort, SystemGh, revision_belongs_to_repository};
 use agent_delivery_telemetry::reconcile::{ReconcileError, ReconciledTrace, reconcile};
@@ -41,10 +41,34 @@ fn execute() -> Result<(), (&'static str, u8)> {
         Some("refresh-tokens") => execute_refresh_tokens(&values),
         Some("capture-codex-usage") => execute_capture_codex_usage(&values),
         Some("bind-codex-usage") => execute_bind_codex_usage(&values),
+        Some("record-review") => execute_record_review(&values),
         Some("collect") => execute_collect(&values),
         Some("report") => execute_report(&values),
         _ => Err(("input", 2)),
     }
+}
+
+fn execute_record_review(values: &[&str]) -> Result<(), (&'static str, u8)> {
+    let [path, trigger, requested, completed, outcome, findings, rework] = values else {
+        return Err(("input", 2));
+    };
+    let source = std::fs::read_to_string(path).map_err(|_| ("io", 11))?;
+    let mut payload: TelemetryPayload =
+        serde_json::from_str(&source).map_err(|_| ("input", 2))?;
+    record_completed_review(
+        &mut payload,
+        trigger,
+        requested,
+        completed,
+        outcome,
+        findings.parse().map_err(|_| ("input", 2))?,
+        rework.parse().map_err(|_| ("input", 2))?,
+    )
+    .map_err(|_| ("review", 14))?;
+    let json = serde_json::to_string_pretty(&payload).map_err(|_| ("input", 2))?;
+    std::fs::write(path, json).map_err(|_| ("io", 11))?;
+    println!(r#"{{"action":"review_recorded"}}"#);
+    Ok(())
 }
 
 fn execute_bind_codex_usage(values: &[&str]) -> Result<(), (&'static str, u8)> {
