@@ -1,6 +1,6 @@
 use std::{fs, process::Command};
 
-use agent_delivery_telemetry::comment::TelemetryPayload;
+use agent_delivery_telemetry::comment::{ReviewRecord, TelemetryPayload};
 
 const PAYLOAD: &str = r#"{
   "schema_version": 1,
@@ -49,5 +49,36 @@ fn cli_binds_once_and_does_not_rewrite_on_duplicate() {
 
     assert!(!invoke().status.success());
     assert_eq!(fs::read_to_string(&payload_path).unwrap(), contents);
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn cli_records_a_completed_review_without_inference() {
+    let directory = std::env::temp_dir().join(format!("adt-review-{}", std::process::id()));
+    fs::create_dir_all(&directory).unwrap();
+    let payload_path = directory.join("payload.json");
+    fs::write(&payload_path, PAYLOAD).unwrap();
+    let invoke = |completed: &str| {
+        Command::new(env!("CARGO_BIN_EXE_agent-delivery-telemetry"))
+            .arg("record-review")
+            .arg(&payload_path)
+            .args([
+                "correctness_uncertainty",
+                "2026-11-06T00:01:00Z",
+                completed,
+                "no_findings",
+                "0",
+                "0",
+            ])
+            .output()
+            .unwrap()
+    };
+
+    assert!(!invoke("2026-11-05T00:02:00Z").status.success());
+    assert!(invoke("2026-11-06T00:02:00Z").status.success());
+    let payload: TelemetryPayload =
+        serde_json::from_str(&fs::read_to_string(&payload_path).unwrap()).unwrap();
+    assert!(matches!(payload.review, ReviewRecord::Requested { .. }));
+    assert_eq!(payload.usage.len(), 0);
     fs::remove_dir_all(directory).unwrap();
 }
