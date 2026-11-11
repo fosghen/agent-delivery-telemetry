@@ -81,6 +81,17 @@ support multiple primary or subagent runs; duplicate tuples and invalid capture
 artifacts leave the payload unchanged. Interactive Codex session logs remain a
 best-effort fallback because their cumulative counters may lag or be absent.
 
+When a controlled implementation run produced no accepted result, record its
+failure independently from successful usage capture:
+
+```sh
+cargo run -- record-attempt-failure /tmp/payload.json
+```
+
+The command reports the failed attempt number and opens the next success
+placeholder. Bind the failed run's exact usage to that number. Repeat once per
+failed retry; malformed attempt lifecycles leave the payload unchanged.
+
 When a review was explicitly requested and completed, record its evidence before
 publishing. This decision is never inferred from bound reviewer usage:
 

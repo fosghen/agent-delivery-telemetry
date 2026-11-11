@@ -37,6 +37,45 @@ pub struct AttemptRecord {
     pub outcome: String,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AttemptError {
+    InvalidLifecycle,
+    Overflow,
+}
+
+/// Marks the current controlled run failed and opens the next attempt.
+///
+/// # Errors
+/// Returns an error unless attempts are contiguous and end in one success placeholder.
+pub fn record_failed_attempt(payload: &mut TelemetryPayload) -> Result<u32, AttemptError> {
+    let count = u32::try_from(payload.attempts.len()).map_err(|_| AttemptError::Overflow)?;
+    let valid = count > 0
+        && payload.attempts.iter().enumerate().all(|(index, attempt)| {
+            u32::try_from(index + 1) == Ok(attempt.number)
+                && if attempt.number == count {
+                    attempt.outcome == "succeeded"
+                } else {
+                    attempt.outcome == "failed"
+                }
+        });
+    if !valid {
+        return Err(AttemptError::InvalidLifecycle);
+    }
+    let next = count.checked_add(1).ok_or(AttemptError::Overflow)?;
+    "failed".clone_into(
+        &mut payload
+            .attempts
+            .last_mut()
+            .ok_or(AttemptError::InvalidLifecycle)?
+            .outcome,
+    );
+    payload.attempts.push(AttemptRecord {
+        number: next,
+        outcome: "succeeded".to_owned(),
+    });
+    Ok(count)
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct StageRecord {
