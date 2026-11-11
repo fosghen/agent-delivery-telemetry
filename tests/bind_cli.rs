@@ -82,3 +82,30 @@ fn cli_records_a_completed_review_without_inference() {
     assert_eq!(payload.usage.len(), 0);
     fs::remove_dir_all(directory).unwrap();
 }
+
+#[test]
+fn cli_records_failure_before_usage_is_bound() {
+    let directory = std::env::temp_dir().join(format!("adt-attempt-{}", std::process::id()));
+    fs::create_dir_all(&directory).unwrap();
+    let payload_path = directory.join("payload.json");
+    fs::write(&payload_path, PAYLOAD).unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_agent-delivery-telemetry"))
+        .arg("record-attempt-failure")
+        .arg(&payload_path)
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    assert!(
+        String::from_utf8(output.stdout)
+            .unwrap()
+            .contains(r#""attempt":1"#)
+    );
+    let payload: TelemetryPayload =
+        serde_json::from_str(&fs::read_to_string(&payload_path).unwrap()).unwrap();
+    assert_eq!(payload.attempts[0].outcome, "failed");
+    assert_eq!(payload.attempts[1].outcome, "succeeded");
+    assert!(payload.usage.is_empty());
+    fs::remove_dir_all(directory).unwrap();
+}
