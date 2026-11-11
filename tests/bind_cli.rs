@@ -106,6 +106,6 @@ fn cli_records_failure_before_usage_is_bound() {
         serde_json::from_str(&fs::read_to_string(&payload_path).unwrap()).unwrap();
     assert_eq!(payload.attempts[0].outcome, "failed");
     assert_eq!(payload.attempts[1].outcome, "succeeded");
-    assert!(payload.usage.is_empty());
+    assert_eq!(payload.usage, Vec::new());
     fs::remove_dir_all(directory).unwrap();
 }

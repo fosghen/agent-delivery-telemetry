@@ -62,11 +62,13 @@ pub fn record_failed_attempt(payload: &mut TelemetryPayload) -> Result<u32, Atte
         return Err(AttemptError::InvalidLifecycle);
     }
     let next = count.checked_add(1).ok_or(AttemptError::Overflow)?;
-    payload
-        .attempts
-        .last_mut()
-        .ok_or(AttemptError::InvalidLifecycle)?
-        .outcome = "failed".to_owned();
+    "failed".clone_into(
+        &mut payload
+            .attempts
+            .last_mut()
+            .ok_or(AttemptError::InvalidLifecycle)?
+            .outcome,
+    );
     payload.attempts.push(AttemptRecord {
         number: next,
         outcome: "succeeded".to_owned(),
